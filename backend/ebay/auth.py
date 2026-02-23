@@ -1,7 +1,10 @@
 import base64
+import logging
 import time
 import httpx
 from config import config
+
+logger = logging.getLogger(__name__)
 
 
 class EbayAuth:
@@ -26,25 +29,47 @@ class EbayAuth:
             return self._app_token
 
         token_url = f"{config.ebay_api_base}/identity/v1/oauth2/token"
+        logger.info(f"Requesting app token from: {token_url}")
+        logger.info(f"Using Client ID: {config.EBAY_CLIENT_ID[:20]}...")
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                token_url,
-                headers={
-                    "Authorization": self._get_basic_auth_header(),
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                data={
-                    "grant_type": "client_credentials",
-                    "scope": "https://api.ebay.com/oauth/api_scope",
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    token_url,
+                    headers={
+                        "Authorization": self._get_basic_auth_header(),
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    data={
+                        "grant_type": "client_credentials",
+                        "scope": "https://api.ebay.com/oauth/api_scope",
+                    },
+                )
+
+                if response.status_code != 200:
+                    logger.error(
+                        f"Token request failed: {response.status_code} - {response.text}"
+                    )
+                    response.raise_for_status()
+
+                data = response.json()
+        except httpx.ProxyError as e:
+            logger.error(f"Proxy error connecting to eBay: {e}")
+            raise ConnectionError(
+                f"Cannot reach eBay API ({token_url}). "
+                "Check your network/proxy settings."
+            ) from e
+        except httpx.ConnectError as e:
+            logger.error(f"Connection error to eBay: {e}")
+            raise ConnectionError(
+                f"Cannot connect to eBay API ({token_url}). "
+                "Check your internet connection."
+            ) from e
 
         self._app_token = data["access_token"]
         # Refresh 5 minutes before actual expiry
         self._app_token_expires_at = time.time() + data["expires_in"] - 300
+        logger.info("Successfully obtained eBay app token")
         return self._app_token
 
     def get_auth_url(self, redirect_uri: str, state: str = "") -> str:
