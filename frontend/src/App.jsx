@@ -23,6 +23,7 @@ export default function App() {
   const [alert, setAlert] = useState(null);
   const [apiCalls, setApiCalls] = useState(0);
   const [newListingIds, setNewListingIds] = useState(new Set());
+  const [hasSearched, setHasSearched] = useState(false);
 
   // Sound for new listings
   const audioRef = useRef(null);
@@ -87,13 +88,17 @@ export default function App() {
     }
   }, [playNotificationSound]);
 
-  const { connected } = useWebSocket(handleWsMessage);
+  const { connected, reconnect, lastConnectedAt } = useWebSocket(handleWsMessage);
 
   const handleSearchResults = useCallback((results) => {
     setListings(results.items);
     setSearchTotal(results.total);
     setLoading(false);
+    setHasSearched(true);
   }, []);
+
+  // Refs for SearchBar actions triggered from empty state
+  const searchBarRef = useRef(null);
 
   return (
     <div className="app">
@@ -110,7 +115,23 @@ export default function App() {
             </button>
           ))}
         </div>
+        <div className={`connection-pill ${connected ? 'pill-connected' : 'pill-disconnected'}`}>
+          <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`} />
+          {connected ? 'Connected' : 'Disconnected'}
+          {connected && lastConnectedAt && (
+            <span className="last-sync">Last sync: {new Date(lastConnectedAt).toLocaleTimeString()}</span>
+          )}
+        </div>
       </div>
+
+      {!connected && (
+        <div className="disconnected-banner">
+          <span>Disconnected — monitoring paused</span>
+          <div className="disconnected-actions">
+            <button className="btn btn-sm btn-primary" onClick={reconnect}>Reconnect</button>
+          </div>
+        </div>
+      )}
 
       {alert && (
         <AlertBanner message={alert} onDismiss={() => setAlert(null)} />
@@ -122,15 +143,21 @@ export default function App() {
             <FilterSidebar filters={filters} onChange={setFilters} />
             <div className="main-content">
               <SearchBar
+                ref={searchBarRef}
                 filters={filters}
                 onResults={handleSearchResults}
                 onLoading={setLoading}
+                onFiltersChange={setFilters}
               />
               <ListingTable
                 listings={listings}
                 loading={loading}
                 total={searchTotal}
                 newListingIds={newListingIds}
+                hasSearched={hasSearched}
+                onCreateMonitor={() => searchBarRef.current?.openMonitorEditor()}
+                onRunSearch={() => searchBarRef.current?.focusSearch()}
+                onApplyPreset={(preset) => searchBarRef.current?.applyPreset(preset)}
               />
             </div>
           </>

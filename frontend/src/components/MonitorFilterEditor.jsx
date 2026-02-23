@@ -10,7 +10,9 @@ import React, { useState, useEffect } from 'react';
  *   - max_total_cost: max price + shipping
  *   - (inherited) price_min, price_max, condition, buying_options, free_shipping
  */
-export default function MonitorFilterEditor({ filters, onChange, onClose }) {
+export default function MonitorFilterEditor({ filters, keywords, onChange, onClose }) {
+  const [monitorName, setMonitorName] = useState(keywords || '');
+  const [pollInterval, setPollInterval] = useState('30');
   const [local, setLocal] = useState({
     price_min: '',
     price_max: '',
@@ -64,6 +66,11 @@ export default function MonitorFilterEditor({ filters, onChange, onClose }) {
         ? parseFloat(local.max_total_cost)
         : null,
     };
+    // If this is a new monitor creation (has keywords prop), include meta
+    if (keywords !== undefined) {
+      parsed._keywords = monitorName || keywords;
+      parsed._poll_interval = parseInt(pollInterval, 10) || 30;
+    }
     onChange(parsed);
   };
 
@@ -73,11 +80,40 @@ export default function MonitorFilterEditor({ filters, onChange, onClose }) {
     <div className="filter-editor-overlay" onClick={onClose}>
       <div className="filter-editor" onClick={(e) => e.stopPropagation()}>
         <div className="filter-editor-header">
-          <h3>Monitor Filters</h3>
+          <h3>{keywords !== undefined ? 'Save as Monitor' : 'Monitor Filters'}</h3>
           <button className="dismiss" onClick={onClose}>&times;</button>
         </div>
 
         <div className="filter-editor-body">
+          {/* ---- Monitor config ---- */}
+          {keywords !== undefined && (
+            <div className="filter-editor-section">
+              <div className="filter-editor-section-title">Monitor Setup</div>
+              <div className="filter-editor-row">
+                <label>Keywords</label>
+                <input
+                  type="text"
+                  placeholder="e.g. iPhone 15 Pro"
+                  value={monitorName}
+                  onChange={(e) => setMonitorName(e.target.value)}
+                />
+              </div>
+              <div className="filter-editor-row">
+                <label>Check Frequency</label>
+                <select
+                  value={pollInterval}
+                  onChange={(e) => setPollInterval(e.target.value)}
+                >
+                  <option value="15">Every 15 seconds</option>
+                  <option value="30">Every 30 seconds</option>
+                  <option value="60">Every 1 minute</option>
+                  <option value="120">Every 2 minutes</option>
+                  <option value="300">Every 5 minutes</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* ---- eBay API filters ---- */}
           <div className="filter-editor-section">
             <div className="filter-editor-section-title">Search Filters</div>
@@ -210,7 +246,9 @@ export default function MonitorFilterEditor({ filters, onChange, onClose }) {
 
         <div className="filter-editor-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Save Filters</button>
+          <button className="btn btn-primary" onClick={handleSave}>
+            {keywords !== undefined ? 'Create Monitor' : 'Save Filters'}
+          </button>
         </div>
       </div>
     </div>

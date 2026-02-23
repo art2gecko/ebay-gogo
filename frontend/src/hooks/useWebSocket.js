@@ -5,6 +5,7 @@ const RECONNECT_DELAY = 3000;
 
 export function useWebSocket(onMessage) {
   const [connected, setConnected] = useState(false);
+  const [lastConnectedAt, setLastConnectedAt] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const onMessageRef = useRef(onMessage);
@@ -21,12 +22,14 @@ export function useWebSocket(onMessage) {
 
     ws.onopen = () => {
       setConnected(true);
+      setLastConnectedAt(Date.now());
       console.log('WebSocket connected');
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        setLastConnectedAt(Date.now());
         if (onMessageRef.current) {
           onMessageRef.current(data);
         }
@@ -49,6 +52,16 @@ export function useWebSocket(onMessage) {
     wsRef.current = ws;
   }, []);
 
+  const reconnect = useCallback(() => {
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    if (wsRef.current) {
+      wsRef.current.onclose = null; // prevent auto-reconnect loop
+      wsRef.current.close();
+    }
+    wsRef.current = null;
+    connect();
+  }, [connect]);
+
   useEffect(() => {
     connect();
     return () => {
@@ -63,5 +76,5 @@ export function useWebSocket(onMessage) {
     }
   }, []);
 
-  return { connected, send };
+  return { connected, send, reconnect, lastConnectedAt };
 }
