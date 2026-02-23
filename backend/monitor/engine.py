@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import time
 from ebay.browse import browse_api
 from ebay.models import ItemSummary
 from database.models import (
@@ -13,6 +12,62 @@ from monitor.alerts import send_telegram_notification
 from config import config
 
 logger = logging.getLogger(__name__)
+
+
+def _passes_filters(item: ItemSummary, filters: dict) -> bool:
+    """Check if a listing passes all advanced monitor filters.
+
+    Filters checked (all are optional):
+      - title_include: list of words that MUST appear in the title
+      - title_exclude: list of words that must NOT appear in the title
+      - min_seller_feedback: minimum seller feedback percentage (e.g. 95.0)
+      - exclude_sellers: list of seller usernames to skip
+      - max_total_cost: maximum price + shipping combined
+    """
+    title_lower = (item.title or "").lower()
+
+    # Title must-include keywords (ALL must match)
+    title_include = filters.get("title_include")
+    if title_include:
+        for word in title_include:
+            if word.lower() not in title_lower:
+                return False
+
+    # Title must-exclude keywords (NONE may match)
+    title_exclude = filters.get("title_exclude")
+    if title_exclude:
+        for word in title_exclude:
+            if word.lower() in title_lower:
+                return False
+
+    # Minimum seller feedback percentage
+    min_feedback = filters.get("min_seller_feedback")
+    if min_feedback is not None:
+        try:
+            seller_fb = float(item.seller_feedback or "0")
+            if seller_fb < float(min_feedback):
+                return False
+        except (ValueError, TypeError):
+            pass
+
+    # Excluded sellers
+    exclude_sellers = filters.get("exclude_sellers")
+    if exclude_sellers:
+        seller = (item.seller_name or "").lower()
+        for blocked in exclude_sellers:
+            if blocked.lower() == seller:
+                return False
+
+    # Maximum total cost (price + shipping)
+    max_total = filters.get("max_total_cost")
+    if max_total is not None:
+        try:
+            if item.total_cost > float(max_total):
+                return False
+        except (ValueError, TypeError):
+            pass
+
+    return True
 
 
 class MonitorEngine:
@@ -122,9 +177,29 @@ class MonitorEngine:
                 )
 
                 new_count = 0
+                filtered_count = 0
                 for item in result.itemSummaries:
                     if not await is_listing_seen(item.itemId):
-                        # New listing found!
+                        # Check advanced filters before alerting
+                        if not _passes_filters(item, filters):
+                            # Mark seen so we don't re-check, but don't alert
+                            await mark_listing_seen(
+                                ebay_item_id=item.itemId,
+                                title=item.title,
+                                price=item.price_value,
+                                currency=item.price.currency if item.price else "USD",
+                                shipping_cost=item.shipping_cost_value,
+                                seller_name=item.seller_name,
+                                seller_feedback=item.seller_feedback,
+                                image_url=item.image_url,
+                                item_url=item.itemWebUrl,
+                                condition=item.condition,
+                                search_id=search_id,
+                            )
+                            filtered_count += 1
+                            continue
+
+                        # New listing that passes all filters!
                         await mark_listing_seen(
                             ebay_item_id=item.itemId,
                             title=item.title,
@@ -158,9 +233,9 @@ class MonitorEngine:
 
                         new_count += 1
 
-                if new_count > 0:
+                if new_count > 0 or filtered_count > 0:
                     logger.info(
-                        f"Search #{search_id}: Found {new_count} new listing(s)"
+                        f"Search #{search_id}: {new_count} new, {filtered_count} filtered out"
                     )
 
                 # Send monitor status update

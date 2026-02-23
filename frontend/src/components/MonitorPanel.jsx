@@ -1,11 +1,41 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getMonitors, deleteMonitor, updateMonitor, getMonitorListings } from '../hooks/useApi';
+import MonitorFilterEditor from './MonitorFilterEditor';
+
+function FilterBadges({ filters }) {
+  if (!filters) return null;
+  const badges = [];
+
+  if (filters.price_min || filters.price_max) {
+    const min = filters.price_min ? `$${filters.price_min}` : '';
+    const max = filters.price_max ? `$${filters.price_max}` : '';
+    badges.push(`Price: ${min}${min && max ? '–' : ''}${max}`);
+  }
+  if (filters.condition) badges.push(filters.condition);
+  if (filters.free_shipping) badges.push('Free Ship');
+  if (filters.title_include?.length) badges.push(`+${filters.title_include.join(', +')}`);
+  if (filters.title_exclude?.length) badges.push(`-${filters.title_exclude.join(', -')}`);
+  if (filters.max_total_cost) badges.push(`Max $${filters.max_total_cost}`);
+  if (filters.min_seller_feedback) badges.push(`Seller ${filters.min_seller_feedback}%+`);
+  if (filters.exclude_sellers?.length) badges.push(`${filters.exclude_sellers.length} blocked`);
+
+  if (badges.length === 0) return null;
+
+  return (
+    <div className="monitor-filter-badges">
+      {badges.map((b, i) => (
+        <span key={i} className="filter-badge">{b}</span>
+      ))}
+    </div>
+  );
+}
 
 export default function MonitorPanel() {
   const [monitors, setMonitors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonitor, setSelectedMonitor] = useState(null);
   const [listings, setListings] = useState([]);
+  const [editingFilters, setEditingFilters] = useState(null); // monitor id being edited
 
   const loadMonitors = useCallback(async () => {
     try {
@@ -57,6 +87,21 @@ export default function MonitorPanel() {
     }
   };
 
+  const handleSaveFilters = async (newFilters) => {
+    try {
+      await updateMonitor(editingFilters, { filters: newFilters });
+      setEditingFilters(null);
+      loadMonitors();
+    } catch (err) {
+      console.error('Failed to update filters:', err);
+    }
+  };
+
+  const getMonitorFilters = (id) => {
+    const m = monitors.find(m => m.id === id);
+    return m?.filters || {};
+  };
+
   if (loading) return <div className="loading">Loading monitors...</div>;
 
   return (
@@ -89,35 +134,48 @@ export default function MonitorPanel() {
                 style={{
                   borderColor: selectedMonitor === m.id ? 'var(--accent)' : undefined,
                   cursor: 'pointer',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  gap: '8px',
                 }}
                 onClick={() => handleViewListings(m.id)}
               >
-                <div>
-                  <div className="monitor-keywords">{m.keywords}</div>
-                  <div className="monitor-meta">
-                    Every {m.poll_interval_sec}s
-                    {' | '}
-                    {m.active ? (
-                      <span style={{ color: 'var(--success)' }}>Active</span>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>Paused</span>
-                    )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="monitor-keywords">{m.keywords}</div>
+                    <div className="monitor-meta">
+                      Every {m.poll_interval_sec}s
+                      {' | '}
+                      {m.active ? (
+                        <span style={{ color: 'var(--success)' }}>Active</span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Paused</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="monitor-actions">
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={(e) => { e.stopPropagation(); setEditingFilters(m.id); }}
+                      title="Edit filters"
+                    >
+                      Filters
+                    </button>
+                    <button
+                      className={`btn btn-sm ${m.active ? 'btn-outline' : 'btn-success'}`}
+                      onClick={(e) => { e.stopPropagation(); handleToggle(m.id, m.active); }}
+                    >
+                      {m.active ? 'Pause' : 'Resume'}
+                    </button>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div className="monitor-actions">
-                  <button
-                    className={`btn btn-sm ${m.active ? 'btn-outline' : 'btn-success'}`}
-                    onClick={(e) => { e.stopPropagation(); handleToggle(m.id, m.active); }}
-                  >
-                    {m.active ? 'Pause' : 'Resume'}
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                  >
-                    Delete
-                  </button>
-                </div>
+                <FilterBadges filters={m.filters} />
               </div>
             ))}
           </div>
@@ -191,6 +249,14 @@ export default function MonitorPanel() {
           </div>
         )}
       </div>
+
+      {editingFilters !== null && (
+        <MonitorFilterEditor
+          filters={getMonitorFilters(editingFilters)}
+          onChange={handleSaveFilters}
+          onClose={() => setEditingFilters(null)}
+        />
+      )}
     </div>
   );
 }
