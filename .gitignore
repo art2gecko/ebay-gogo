@@ -1,0 +1,47 @@
+# eBay-GoGo
+
+**/node_modules/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
+/frontend/out/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+backend/venv/
+backend/.venv/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite3
+
+# PyInstaller
+*.spec
+
+# Electron
+/frontend/release/
+
+# Logs
+*.log
