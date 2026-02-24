@@ -1,20 +1,58 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Search } from 'lucide-react'
 import { AgGridReact } from 'ag-grid-react'
 import type { ColDef, CellValueChangedEvent, RowSelectedEvent } from 'ag-grid-community'
 import { Button } from '../ui/button'
+import { Input } from '../ui/input'
 import { MonitorModal } from './MonitorModal'
 import { useMonitorStore } from '@/stores/monitorStore'
 import { timeAgo } from '@/lib/utils'
-import type { Monitor } from '@shared/types'
+import type { Monitor, MonitorCreateInput } from '@shared/types'
 
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 export function MonitorsTab(): React.JSX.Element {
-  const { monitors, fetchMonitors, updateMonitor, deleteMonitor } = useMonitorStore()
+  const { monitors, fetchMonitors, updateMonitor, deleteMonitor, createMonitor } = useMonitorStore()
   const [showModal, setShowModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [quickKeywords, setQuickKeywords] = useState('')
+  const [quickCreating, setQuickCreating] = useState(false)
+
+  const handleQuickCreate = useCallback(async () => {
+    const trimmed = quickKeywords.trim()
+    if (!trimmed || quickCreating) return
+    setQuickCreating(true)
+    try {
+      const input: MonitorCreateInput = {
+        enabled: true,
+        group: 'Default',
+        keywords: trimmed.split(',').map((s) => s.trim()).filter(Boolean),
+        searchInDesc: false,
+        priceMin: null,
+        priceMax: null,
+        condition: 'Any',
+        format: 'BuyItNow',
+        freeShippingOnly: false,
+        excludeKeywords: [],
+        sellerMinFeedback: 0,
+        usOnly: true,
+        totalPriceMode: false,
+        allowSellers: [],
+        denySellers: [],
+        intervalSec: 60,
+        viewType: 'Results',
+        site: 'EBAY-US',
+        locatedIn: '',
+        shipsTo: '',
+        categoryId: ''
+      }
+      await createMonitor(input)
+      setQuickKeywords('')
+    } finally {
+      setQuickCreating(false)
+    }
+  }, [quickKeywords, quickCreating, createMonitor])
 
   useEffect(() => {
     fetchMonitors()
@@ -102,9 +140,25 @@ export function MonitorsTab(): React.JSX.Element {
     <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
       <div className="flex items-center gap-2">
         <h2 className="text-sm font-semibold">Monitors</h2>
-        <Button size="xs" onClick={() => setShowModal(true)}>
+        <div className="flex items-center gap-1.5 flex-1 max-w-md">
+          <div className="relative flex-1">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={quickKeywords}
+              onChange={(e) => setQuickKeywords(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleQuickCreate() }}
+              placeholder="Type keywords and press Enter to create monitor..."
+              className="h-7 text-xs pl-7"
+            />
+          </div>
+          <Button size="xs" onClick={handleQuickCreate} disabled={!quickKeywords.trim() || quickCreating}>
+            <Plus size={12} className="mr-1" />
+            Add
+          </Button>
+        </div>
+        <Button size="xs" variant="outline" onClick={() => setShowModal(true)}>
           <Plus size={12} className="mr-1" />
-          New Monitor
+          Advanced
         </Button>
         {selectedIds.length > 0 && (
           <Button size="xs" variant="destructive" onClick={handleDelete}>
