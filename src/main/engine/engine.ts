@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, Notification } from 'electron'
 import {
   listMonitors, updateMonitorStatus, upsertListings, addLog
 } from '../db/database'
@@ -9,7 +9,7 @@ const MAX_CONCURRENCY = 3
 const API_CALL_LIMIT = 5000
 
 let running = false
-let timers: Map<number, NodeJS.Timeout> = new Map()
+const timers: Map<number, NodeJS.Timeout> = new Map()
 let activeTasks = 0
 let mainWindow: BrowserWindow | null = null
 
@@ -75,29 +75,20 @@ async function runMonitorCheck(monitor: Monitor): Promise<void> {
     // Set monitorId on each listing
     const withMonitorId = filtered.map(l => ({ ...l, monitorId: monitor.id }))
 
-    // Upsert to DB
-    const saved = upsertListings(withMonitorId)
+    // Upsert to DB - returns { saved, newCount } with insert tracking
+    const { saved, newCount } = upsertListings(withMonitorId)
 
-    // Find truly new listings (just inserted)
-    const newListings = saved.filter(s => {
-      const foundTime = new Date(s.foundAt).getTime()
-      const now = Date.now()
-      return now - foundTime < 5000 // within 5 seconds = new
-    })
-
-    if (newListings.length > 0) {
-      addLog('info', `Found ${newListings.length} new listing(s) for "${monitor.keywords.join(' ')}"`, monitor.id)
-      sendToRenderer('engine:new-listings', newListings)
+    if (newCount > 0) {
+      const newListings = saved.slice(0, newCount)
+      addLog('info', `Found ${newCount} new listing(s) for "${monitor.keywords.join(' ')}"`, monitor.id)
+      sendToRenderer('engine:new-listings', saved)
 
       // Desktop notification
-      if (newListings.length > 0) {
-        const { Notification } = require('electron') as typeof import('electron')
-        if (Notification.isSupported()) {
-          new Notification({
-            title: `eBay-GoGo: ${newListings.length} new listing(s)`,
-            body: `${monitor.keywords.join(' ')} - ${newListings[0].title}`
-          }).show()
-        }
+      if (Notification.isSupported()) {
+        new Notification({
+          title: `eBay-GoGo: ${newCount} new listing(s)`,
+          body: `${monitor.keywords.join(' ')} - ${newListings[0].title}`
+        }).show()
       }
     }
 

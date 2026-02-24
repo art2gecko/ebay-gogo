@@ -16,7 +16,11 @@ const SORT_OPTIONS = [
   { value: 'BestMatch', label: 'Best Match' }
 ]
 
-export function TopBar(): React.JSX.Element {
+interface TopBarProps {
+  onSaveMonitor?: () => void
+}
+
+export function TopBar({ onSaveMonitor }: TopBarProps): React.JSX.Element {
   const { query, setQuery, sortBy, setSortBy, runSearch, loading } = useSearchStore()
   const { engineStatus, startEngine, stopEngine } = useAppStore()
 
@@ -67,7 +71,7 @@ export function TopBar(): React.JSX.Element {
         Search
       </Button>
 
-      <Button size="xs" variant="outline" onClick={() => {/* TODO: save as monitor modal */}}>
+      <Button size="xs" variant="outline" onClick={onSaveMonitor} disabled={!query.trim()}>
         <Save size={12} className="mr-1" />
         Save Monitor
       </Button>

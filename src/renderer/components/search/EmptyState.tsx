@@ -11,13 +11,15 @@ export function EmptyState({ onCreateMonitor }: EmptyStateProps): React.JSX.Elem
   const { setQuery, setFilter, setSortBy, runSearch } = useSearchStore()
 
   const runPreset = (keywords: string, filters: Record<string, unknown>): void => {
+    // Zustand setState is synchronous, so all state is updated before runSearch reads it
     setQuery(keywords)
     if (filters.format) setFilter('format', filters.format as 'BuyItNow' | 'Auction' | 'All')
     if (filters.freeShippingOnly) setFilter('freeShippingOnly', true)
     if (filters.condition) setFilter('condition', filters.condition as string)
     if (filters.priceMax) setFilter('priceMax', filters.priceMax as number)
     if (filters.sortBy) setSortBy(filters.sortBy as 'NewlyListed' | 'EndingSoon')
-    setTimeout(() => runSearch(), 100)
+    // Use queueMicrotask to ensure all Zustand batched updates are flushed
+    queueMicrotask(() => runSearch())
   }
 
   return (

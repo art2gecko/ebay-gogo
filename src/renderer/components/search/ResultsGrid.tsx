@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
-import type { ColDef, GridReadyEvent, RowClickedEvent, CellKeyDownEvent } from 'ag-grid-community'
+import type { ColDef, RowClickedEvent, CellKeyDownEvent } from 'ag-grid-community'
 import { useSearchStore } from '@/stores/searchStore'
 import { formatPrice, timeAgo, copyToClipboard } from '@/lib/utils'
 import { openExternal } from '@/hooks/useIpc'
@@ -12,6 +12,10 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 export function ResultsGrid(): React.JSX.Element {
   const { results, selectedListing, setSelectedListing, ignoreSeller, addExcludeKeyword } = useSearchStore()
   const gridRef = useRef<AgGridReact>(null)
+  const selectedRef = useRef<Listing | null>(null)
+
+  // Keep ref in sync so hotkey handler doesn't need selectedListing in deps
+  selectedRef.current = selectedListing
 
   const columnDefs = useMemo<ColDef<Listing>[]>(() => [
     {
@@ -23,7 +27,8 @@ export function ResultsGrid(): React.JSX.Element {
       cellRenderer: (params: { value: string[] }) => {
         const src = params.value?.[0]
         if (!src) return ''
-        return `<img src="${src}" style="width:30px;height:30px;object-fit:cover;border-radius:3px;" />`
+        const escaped = src.replace(/"/g, '&quot;')
+        return `<img src="${escaped}" style="width:30px;height:30px;object-fit:cover;border-radius:3px;" alt="" />`
       }
     },
     {
@@ -37,8 +42,7 @@ export function ResultsGrid(): React.JSX.Element {
       headerName: 'Price',
       field: 'price',
       width: 90,
-      valueFormatter: (p) => formatPrice(p.value),
-      sort: null
+      valueFormatter: (p) => formatPrice(p.value)
     },
     {
       headerName: 'Ship',
@@ -102,47 +106,38 @@ export function ResultsGrid(): React.JSX.Element {
     suppressMovable: false
   }), [])
 
-  const onGridReady = useCallback((_params: GridReadyEvent) => {
-    // Grid ready
-  }, [])
-
   const onRowClicked = useCallback((event: RowClickedEvent<Listing>) => {
     if (event.data) {
       setSelectedListing(event.data)
     }
   }, [setSelectedListing])
 
-  // Global hotkeys
+  // Global hotkeys - uses ref to avoid re-adding listener on every selection change
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
-      // Don't trigger hotkeys when typing in inputs
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return
 
-      if (!selectedListing) return
+      const listing = selectedRef.current
+      if (!listing) return
 
       switch (e.key.toLowerCase()) {
         case 'b':
-          // Buy - open eBay item URL
-          openExternal(selectedListing.url)
+          openExternal(listing.url)
           break
         case 'o':
-          // Make offer
-          if (selectedListing.bestOffer) {
-            openExternal(selectedListing.url + '?_trksid=p2047675.l1557')
+          if (listing.bestOffer) {
+            openExternal(listing.url + '?_trksid=p2047675.l1557')
           }
           break
         case 'c':
-          // Copy link
-          copyToClipboard(selectedListing.url)
+          copyToClipboard(listing.url)
           break
         case 'i':
-          // Ignore seller
-          ignoreSeller(selectedListing.sellerName)
+          ignoreSeller(listing.sellerName)
           break
         case 'e': {
-          // Add exclude keyword - prompt-like behavior, use first word of title
-          const firstWord = selectedListing.title.split(' ')[0]
+          const firstWord = listing.title.split(' ')[0]
           if (firstWord) addExcludeKeyword(firstWord)
           break
         }
@@ -151,7 +146,7 @@ export function ResultsGrid(): React.JSX.Element {
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedListing, ignoreSeller, addExcludeKeyword])
+  }, [ignoreSeller, addExcludeKeyword])
 
   const onCellKeyDown = useCallback((event: CellKeyDownEvent<Listing>) => {
     const e = event.event as KeyboardEvent | undefined
@@ -168,7 +163,6 @@ export function ResultsGrid(): React.JSX.Element {
         rowData={results}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
-        onGridReady={onGridReady}
         onRowClicked={onRowClicked}
         onCellKeyDown={onCellKeyDown}
         rowSelection="multiple"

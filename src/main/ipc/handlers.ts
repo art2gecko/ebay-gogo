@@ -54,7 +54,7 @@ export function registerIpcHandlers(): void {
   // ============================================================
   handle('listings:search', async (_e, params) => {
     const results = await searchListings(params)
-    return upsertListings(results)
+    return upsertListings(results).saved
   })
 
   handle('listings:getByMonitor', (_e, { monitorId, limit }) =>
@@ -106,7 +106,7 @@ export function registerIpcHandlers(): void {
   // ============================================================
   handle('search:run', async (_e, params) => {
     const results = await searchListings(params)
-    return upsertListings(results)
+    return upsertListings(results).saved
   })
 
   // ============================================================

@@ -8,19 +8,37 @@ import { MonitorsBottomTable } from '../monitors/MonitorsBottomTable'
 import { MonitorModal } from '../monitors/MonitorModal'
 import { useSearchStore } from '@/stores/searchStore'
 
-export function SearchLayout(): React.JSX.Element {
+interface SearchLayoutProps {
+  showSaveMonitor?: boolean
+  onCloseSaveMonitor?: () => void
+}
+
+export function SearchLayout({ showSaveMonitor, onCloseSaveMonitor }: SearchLayoutProps): React.JSX.Element {
   const { results, loading } = useSearchStore()
   const [showMonitorModal, setShowMonitorModal] = useState(false)
+
+  // Handle external trigger (from TopBar's Save Monitor button)
+  const isModalOpen = showMonitorModal || (showSaveMonitor ?? false)
+  const closeModal = (): void => {
+    setShowMonitorModal(false)
+    onCloseSaveMonitor?.()
+  }
   const [bottomHeight, setBottomHeight] = useState(200)
   const [rightWidth, setRightWidth] = useState(300)
   const resizingRef = useRef<'bottom' | 'right' | null>(null)
   const startPosRef = useRef(0)
   const startSizeRef = useRef(0)
 
+  // Use refs for sizes to avoid stale closure in mouse handlers
+  const bottomHeightRef = useRef(bottomHeight)
+  const rightWidthRef = useRef(rightWidth)
+  bottomHeightRef.current = bottomHeight
+  rightWidthRef.current = rightWidth
+
   const handleMouseDown = useCallback((direction: 'bottom' | 'right', e: React.MouseEvent) => {
     resizingRef.current = direction
     startPosRef.current = direction === 'bottom' ? e.clientY : e.clientX
-    startSizeRef.current = direction === 'bottom' ? bottomHeight : rightWidth
+    startSizeRef.current = direction === 'bottom' ? bottomHeightRef.current : rightWidthRef.current
 
     const handleMouseMove = (ev: MouseEvent): void => {
       if (!resizingRef.current) return
@@ -45,7 +63,7 @@ export function SearchLayout(): React.JSX.Element {
     document.addEventListener('mouseup', handleMouseUp)
     document.body.style.cursor = direction === 'bottom' ? 'row-resize' : 'col-resize'
     document.body.style.userSelect = 'none'
-  }, [bottomHeight, rightWidth])
+  }, [])
 
   const hasResults = results.length > 0 || loading
 
@@ -97,7 +115,7 @@ export function SearchLayout(): React.JSX.Element {
       </div>
 
       {/* Monitor modal */}
-      <MonitorModal open={showMonitorModal} onClose={() => setShowMonitorModal(false)} />
+      <MonitorModal open={isModalOpen} onClose={closeModal} />
     </div>
   )
 }

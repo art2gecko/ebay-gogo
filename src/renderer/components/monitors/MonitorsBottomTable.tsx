@@ -74,9 +74,8 @@ export function MonitorsBottomTable(): React.JSX.Element {
       headerName: 'On',
       field: 'enabled',
       width: 55,
-      editable: true,
-      cellRenderer: (params: { value: boolean }) =>
-        `<input type="checkbox" ${params.value ? 'checked' : ''} style="cursor:pointer" />`
+      cellDataType: 'boolean',
+      editable: true
     },
     {
       headerName: 'Group',
@@ -96,9 +95,8 @@ export function MonitorsBottomTable(): React.JSX.Element {
       headerName: 'Desc',
       field: 'searchInDesc',
       width: 55,
-      editable: true,
-      cellRenderer: (params: { value: boolean }) =>
-        `<input type="checkbox" ${params.value ? 'checked' : ''} style="cursor:pointer" />`
+      cellDataType: 'boolean',
+      editable: true
     },
     {
       headerName: 'Min$',

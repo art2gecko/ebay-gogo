@@ -67,13 +67,11 @@ export function MonitorsTab(): React.JSX.Element {
 
   const columnDefs = useMemo<ColDef<Monitor>[]>(() => [
     { headerCheckboxSelection: true, checkboxSelection: true, width: 40, sortable: false, filter: false },
-    { headerName: 'On', field: 'enabled', width: 55, editable: true,
-      cellRenderer: (p: { value: boolean }) => `<input type="checkbox" ${p.value ? 'checked' : ''} style="cursor:pointer" />` },
+    { headerName: 'On', field: 'enabled', width: 55, cellDataType: 'boolean', editable: true },
     { headerName: 'Group', field: 'group', width: 100, editable: true },
     { headerName: 'Keywords', field: 'keywords' as keyof Monitor, flex: 1, minWidth: 180, editable: true,
       valueFormatter: (p) => Array.isArray(p.value) ? p.value.join(', ') : String(p.value || '') },
-    { headerName: 'Desc', field: 'searchInDesc', width: 55, editable: true,
-      cellRenderer: (p: { value: boolean }) => `<input type="checkbox" ${p.value ? 'checked' : ''} />` },
+    { headerName: 'Desc', field: 'searchInDesc', width: 55, cellDataType: 'boolean', editable: true },
     { headerName: 'Min$', field: 'priceMin', width: 70, editable: true,
       valueFormatter: (p) => p.value != null ? `$${p.value}` : '' },
     { headerName: 'Max$', field: 'priceMax', width: 70, editable: true,

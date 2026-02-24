@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useState } from 'react'
 import { TopBar } from './components/layout/TopBar'
 import { NavTabs } from './components/layout/NavTabs'
 import { SearchLayout } from './components/search/SearchLayout'
@@ -9,32 +9,28 @@ import { useAppStore } from './stores/appStore'
 import { useMonitorStore } from './stores/monitorStore'
 import { useSearchStore } from './stores/searchStore'
 import { useIpcEvent } from './hooks/useIpc'
-import type { EngineStatus } from '@shared/types'
-import type { Listing, Monitor } from '@shared/types'
+import type { EngineStatus, Listing, Monitor } from '@shared/types'
 
 export default function App(): React.JSX.Element {
   const { activeTab, fetchEngineStatus, setEngineStatus } = useAppStore()
   const { fetchMonitors, updateMonitorInList } = useMonitorStore()
-  const { results } = useSearchStore()
+  const [showSaveMonitor, setShowSaveMonitor] = useState(false)
 
-  // Initial data fetch
   useEffect(() => {
     fetchEngineStatus()
     fetchMonitors()
   }, [fetchEngineStatus, fetchMonitors])
 
-  // Listen for engine events
   const handleStatusChanged = useCallback((status: EngineStatus) => {
     setEngineStatus(status)
   }, [setEngineStatus])
 
   const handleNewListings = useCallback((newListings: Listing[]) => {
-    // Merge new listings into results if on search tab
     const { results: currentResults } = useSearchStore.getState()
     const existingIds = new Set(currentResults.map(l => l.itemId))
-    const truly = (newListings as Listing[]).filter(l => !existingIds.has(l.itemId))
-    if (truly.length > 0) {
-      useSearchStore.setState({ results: [...truly, ...currentResults] })
+    const newOnes = (newListings as Listing[]).filter(l => !existingIds.has(l.itemId))
+    if (newOnes.length > 0) {
+      useSearchStore.setState({ results: [...newOnes, ...currentResults] })
     }
   }, [])
 
@@ -48,10 +44,15 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <TopBar />
+      <TopBar onSaveMonitor={() => setShowSaveMonitor(true)} />
       <NavTabs />
       <main className="flex-1 flex flex-col min-h-0">
-        {activeTab === 'search' && <SearchLayout />}
+        {activeTab === 'search' && (
+          <SearchLayout
+            showSaveMonitor={showSaveMonitor}
+            onCloseSaveMonitor={() => setShowSaveMonitor(false)}
+          />
+        )}
         {activeTab === 'monitors' && <MonitorsTab />}
         {activeTab === 'history' && <HistoryTab />}
         {activeTab === 'settings' && <SettingsTab />}

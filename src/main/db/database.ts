@@ -189,13 +189,17 @@ function rowToListing(row: Record<string, unknown>): Listing {
   }
 }
 
-export function upsertListing(listing: Omit<Listing, 'id' | 'createdAt'>): Listing {
+/** Returns { listing, isNew } so callers know if this was an insert */
+export function upsertListing(listing: Omit<Listing, 'id' | 'createdAt'>): { listing: Listing; isNew: boolean } {
   const existing = getDb().prepare('SELECT id FROM listings WHERE itemId = ?').get(listing.itemId) as { id: number } | undefined
 
   if (existing) {
-    return rowToListing(
-      getDb().prepare('SELECT * FROM listings WHERE id = ?').get(existing.id) as Record<string, unknown>
-    )
+    return {
+      listing: rowToListing(
+        getDb().prepare('SELECT * FROM listings WHERE id = ?').get(existing.id) as Record<string, unknown>
+      ),
+      isNew: false
+    }
   }
 
   const result = getDb().prepare(`
@@ -224,20 +228,26 @@ export function upsertListing(listing: Omit<Listing, 'id' | 'createdAt'>): Listi
     listing.rawJson
   )
 
-  return rowToListing(
-    getDb().prepare('SELECT * FROM listings WHERE id = ?').get(result.lastInsertRowid) as Record<string, unknown>
-  )
+  return {
+    listing: rowToListing(
+      getDb().prepare('SELECT * FROM listings WHERE id = ?').get(result.lastInsertRowid) as Record<string, unknown>
+    ),
+    isNew: true
+  }
 }
 
-export function upsertListings(listings: Omit<Listing, 'id' | 'createdAt'>[]): Listing[] {
-  const results: Listing[] = []
+export function upsertListings(listings: Omit<Listing, 'id' | 'createdAt'>[]): { saved: Listing[]; newCount: number } {
+  const saved: Listing[] = []
+  let newCount = 0
   const insertMany = getDb().transaction((items: Omit<Listing, 'id' | 'createdAt'>[]) => {
     for (const item of items) {
-      results.push(upsertListing(item))
+      const result = upsertListing(item)
+      saved.push(result.listing)
+      if (result.isNew) newCount++
     }
   })
   insertMany(listings)
-  return results
+  return { saved, newCount }
 }
 
 export function getListings(params: {
@@ -359,7 +369,8 @@ export function getLogs(params: {
   }
 
   sql += ' ORDER BY ts DESC'
-  sql += ` LIMIT ${params.limit || 200}`
+  sql += ' LIMIT ?'
+  args.push(params.limit || 200)
 
   const rows = getDb().prepare(sql).all(...args) as Record<string, unknown>[]
   return rows.map(row => ({

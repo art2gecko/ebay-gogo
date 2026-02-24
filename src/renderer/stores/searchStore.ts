@@ -27,6 +27,7 @@ interface SearchStore {
   // Results
   results: Listing[]
   loading: boolean
+  error: string | null
   runSearch: () => Promise<void>
 
   // Selection
@@ -63,12 +64,13 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
 
   results: [],
   loading: false,
+  error: null,
 
   runSearch: async () => {
     const { query, sortBy, filters } = get()
     if (!query.trim()) return
 
-    set({ loading: true })
+    set({ loading: true, error: null })
     try {
       const params: SearchParams = {
         keywords: query,
@@ -87,7 +89,9 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
       const results = await invoke('search:run', params)
       set({ results })
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Search failed'
       console.error('Search failed:', err)
+      set({ error: message })
     } finally {
       set({ loading: false })
     }
@@ -97,6 +101,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setSelectedListing: (listing) => set({ selectedListing: listing }),
 
   addExcludeKeyword: async (keyword) => {
+    const { filters } = get()
+    if (filters.excludeKeywords.includes(keyword)) return
     await invoke('exclude:add', { keyword })
     set((s) => ({
       filters: {

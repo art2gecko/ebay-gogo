@@ -88,7 +88,7 @@ export function DetailsPane(): React.JSX.Element {
           variant="outline"
           className="w-full justify-start"
           disabled={!listing.bestOffer}
-          onClick={() => listing.bestOffer && openExternal(listing.url)}
+          onClick={() => listing.bestOffer && openExternal(listing.url + '?_trksid=p2047675.l1557')}
         >
           <MessageSquare size={12} className="mr-2" />
           Make Offer
