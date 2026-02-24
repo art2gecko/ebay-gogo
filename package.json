@@ -16,7 +16,7 @@
   "dependencies": {
     "ag-grid-community": "^32.0.0",
     "ag-grid-react": "^32.0.0",
-    "better-sqlite3": "^11.0.0",
+    "sql.js": "^1.11.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "electron-store": "^8.2.0",

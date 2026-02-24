@@ -1,33 +1,37 @@
-declare module 'better-sqlite3' {
+declare module 'sql.js' {
+  interface QueryExecResult {
+    columns: string[]
+    values: unknown[][]
+  }
+
   interface Statement {
-    run(...params: unknown[]): Database.RunResult
-    get(...params: unknown[]): unknown
-    all(...params: unknown[]): unknown[]
-  }
-
-  interface RunResult {
-    changes: number
-    lastInsertRowid: number | bigint
-  }
-
-  interface Transaction<F extends (...args: unknown[]) => unknown> {
-    (...args: Parameters<F>): ReturnType<F>
+    bind(params?: unknown[]): boolean
+    step(): boolean
+    getAsObject(): Record<string, unknown>
+    get(): unknown[]
+    getColumnNames(): string[]
+    free(): boolean
+    reset(): void
   }
 
   interface Database {
+    run(sql: string, params?: unknown[]): Database
+    exec(sql: string, params?: unknown[]): QueryExecResult[]
     prepare(sql: string): Statement
-    exec(sql: string): this
-    pragma(pragma: string, options?: { simple?: boolean }): unknown
-    transaction<F extends (...args: unknown[]) => unknown>(fn: F): Transaction<F>
+    getRowsModified(): number
+    export(): Uint8Array
     close(): void
   }
 
-  interface DatabaseConstructor {
-    new (filename: string, options?: Record<string, unknown>): Database
-    (filename: string, options?: Record<string, unknown>): Database
+  interface SqlJsStatic {
+    Database: new (data?: ArrayLike<number> | Buffer | null) => Database
   }
 
-  const Database: DatabaseConstructor
-  type Database = InstanceType<typeof Database>
-  export = Database
+  function initSqlJs(config?: {
+    locateFile?: (file: string) => string
+    wasmBinary?: ArrayBuffer | Uint8Array
+  }): Promise<SqlJsStatic>
+
+  export default initSqlJs
+  export type { Database, Statement, QueryExecResult, SqlJsStatic }
 }

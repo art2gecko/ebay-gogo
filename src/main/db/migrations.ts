@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3'
+import type { DatabaseWrapper } from './database'
 
 const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -85,8 +85,7 @@ const MIGRATIONS: { version: number; sql: string }[] = [
   }
 ]
 
-export function runMigrations(db: Database.Database): void {
-  db.pragma('journal_mode = WAL')
+export function runMigrations(db: DatabaseWrapper): void {
   db.pragma('foreign_keys = ON')
 
   // Ensure schema_version table exists

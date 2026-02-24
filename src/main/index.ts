@@ -49,9 +49,9 @@ function createWindow(): void {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Initialize database
-  initDatabase()
+  await initDatabase()
 
   // Load credentials into eBay client
   const creds = getCredentials()

@@ -1,23 +1,165 @@
-import Database from 'better-sqlite3'
+import initSqlJs from 'sql.js'
+import type { Database as SqlJsDatabase } from 'sql.js'
 import { app } from 'electron'
+import fs from 'fs'
 import path from 'path'
 import { runMigrations } from './migrations'
 import type {
   Monitor, MonitorCreateInput, MonitorUpdateInput,
-  Listing, LogEntry, SearchParams
+  Listing, LogEntry
 } from '@shared/types'
 
-let db: Database.Database
+// ============================================================
+// SQL.js Wrapper (provides better-sqlite3-compatible API)
+// ============================================================
 
-export function initDatabase(): Database.Database {
+interface RunResult {
+  changes: number
+  lastInsertRowid: number
+}
+
+interface PreparedStatement {
+  run(...params: unknown[]): RunResult
+  get(...params: unknown[]): unknown
+  all(...params: unknown[]): unknown[]
+}
+
+export class DatabaseWrapper {
+  private sqlDb: SqlJsDatabase
+  private dbPath: string
+  private saveTimer: ReturnType<typeof setTimeout> | null = null
+
+  constructor(sqlDb: SqlJsDatabase, dbPath: string) {
+    this.sqlDb = sqlDb
+    this.dbPath = dbPath
+  }
+
+  prepare(sql: string): PreparedStatement {
+    const self = this
+    return {
+      run(...params: unknown[]): RunResult {
+        if (params.length > 0) {
+          self.sqlDb.run(sql, params as any[])
+        } else {
+          self.sqlDb.run(sql)
+        }
+        const changes = self.sqlDb.getRowsModified()
+        const result = self.sqlDb.exec('SELECT last_insert_rowid() as id')
+        const lastInsertRowid = result.length > 0 ? Number(result[0].values[0][0]) : 0
+        self.scheduleSave()
+        return { changes, lastInsertRowid }
+      },
+      get(...params: unknown[]): unknown {
+        const stmt = self.sqlDb.prepare(sql)
+        try {
+          if (params.length > 0) stmt.bind(params as any[])
+          if (stmt.step()) {
+            return stmt.getAsObject()
+          }
+          return undefined
+        } finally {
+          stmt.free()
+        }
+      },
+      all(...params: unknown[]): unknown[] {
+        const stmt = self.sqlDb.prepare(sql)
+        try {
+          if (params.length > 0) stmt.bind(params as any[])
+          const rows: unknown[] = []
+          while (stmt.step()) {
+            rows.push(stmt.getAsObject())
+          }
+          return rows
+        } finally {
+          stmt.free()
+        }
+      }
+    }
+  }
+
+  exec(sql: string): this {
+    this.sqlDb.exec(sql)
+    this.scheduleSave()
+    return this
+  }
+
+  pragma(pragma: string): unknown {
+    const results = this.sqlDb.exec(`PRAGMA ${pragma}`)
+    if (results.length > 0 && results[0].values.length > 0) {
+      return results[0].values[0][0]
+    }
+    return undefined
+  }
+
+  transaction<F extends (...args: unknown[]) => unknown>(fn: F): (...args: Parameters<F>) => ReturnType<F> {
+    return ((...args: Parameters<F>) => {
+      this.sqlDb.run('BEGIN TRANSACTION')
+      try {
+        const result = fn(...args)
+        this.sqlDb.run('COMMIT')
+        this.scheduleSave()
+        return result
+      } catch (e) {
+        this.sqlDb.run('ROLLBACK')
+        throw e
+      }
+    }) as (...args: Parameters<F>) => ReturnType<F>
+  }
+
+  close(): void {
+    this.saveNow()
+    this.sqlDb.close()
+  }
+
+  private scheduleSave(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer)
+    this.saveTimer = setTimeout(() => this.saveNow(), 100)
+  }
+
+  saveNow(): void {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+    }
+    try {
+      const data = this.sqlDb.export()
+      fs.writeFileSync(this.dbPath, Buffer.from(data))
+    } catch (e) {
+      console.error('[DB] Failed to save database:', e)
+    }
+  }
+}
+
+// ============================================================
+// Database initialization
+// ============================================================
+
+let db: DatabaseWrapper
+
+export async function initDatabase(): Promise<DatabaseWrapper> {
+  // Load the WASM binary ourselves to avoid path resolution issues in packaged apps
+  const sqlJsMain = require.resolve('sql.js')
+  const wasmPath = path.join(path.dirname(sqlJsMain), 'sql-wasm.wasm')
+  const wasmBinary = fs.readFileSync(wasmPath)
+
+  const SQL = await initSqlJs({ wasmBinary })
   const dbPath = path.join(app.getPath('userData'), 'ebay-gogo.db')
-  db = new Database(dbPath)
+
+  let sqlDb: SqlJsDatabase
+  if (fs.existsSync(dbPath)) {
+    const buffer = fs.readFileSync(dbPath)
+    sqlDb = new SQL.Database(buffer)
+  } else {
+    sqlDb = new SQL.Database()
+  }
+
+  db = new DatabaseWrapper(sqlDb, dbPath)
   runMigrations(db)
   console.log(`[DB] Initialized at ${dbPath}`)
   return db
 }
 
-export function getDb(): Database.Database {
+export function getDb(): DatabaseWrapper {
   if (!db) throw new Error('Database not initialized')
   return db
 }
