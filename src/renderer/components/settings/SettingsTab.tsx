@@ -137,27 +137,28 @@ export function SettingsTab(): React.JSX.Element {
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground mb-3">
-          Credentials are stored locally with encryption. Leave blank for mock mode.
+          Get your keys from <span className="text-primary font-mono">developer.ebay.com/my/keys</span>.
+          Uses Browse API with OAuth. Set environment to <strong>Production</strong> for live results. Leave blank for mock mode.
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">App ID</label>
+            <label className="text-[11px] text-muted-foreground mb-1 block">App ID (Client ID)</label>
             <Input
               type="password"
               value={form.appId}
               onChange={(e) => update('appId', e.target.value)}
               className="h-8 text-xs font-mono"
-              placeholder="Enter App ID..."
+              placeholder="YourApp-name-PRD-..."
             />
           </div>
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Cert ID</label>
+            <label className="text-[11px] text-muted-foreground mb-1 block">Cert ID (Client Secret)</label>
             <Input
               type="password"
               value={form.certId}
               onChange={(e) => update('certId', e.target.value)}
               className="h-8 text-xs font-mono"
-              placeholder="Enter Cert ID..."
+              placeholder="PRD-xxxxxxxx-xxxx..."
             />
           </div>
           <div>
@@ -167,7 +168,7 @@ export function SettingsTab(): React.JSX.Element {
               value={form.devId}
               onChange={(e) => update('devId', e.target.value)}
               className="h-8 text-xs font-mono"
-              placeholder="Enter Dev ID..."
+              placeholder="xxxxxxxx-xxxx-xxxx..."
             />
           </div>
           <div>
@@ -180,13 +181,13 @@ export function SettingsTab(): React.JSX.Element {
             />
           </div>
           <div className="col-span-2">
-            <label className="text-[11px] text-muted-foreground mb-1 block">OAuth Token (optional)</label>
+            <label className="text-[11px] text-muted-foreground mb-1 block">OAuth Token (optional — auto-generated from App ID + Cert ID)</label>
             <Input
               type="password"
               value={form.oauthToken}
               onChange={(e) => update('oauthToken', e.target.value)}
               className="h-8 text-xs font-mono"
-              placeholder="Enter OAuth token..."
+              placeholder="Leave blank — token is generated automatically"
             />
           </div>
         </div>

@@ -6,8 +6,15 @@ let credentials: EbayCredentials | null = null
 let apiCallsToday = 0
 let apiCallDate = ''
 
+// OAuth token cache
+let oauthAppToken: string | null = null
+let oauthTokenExpiry = 0
+
 export function setCredentials(creds: EbayCredentials): void {
   credentials = creds
+  // Invalidate cached token when credentials change
+  oauthAppToken = null
+  oauthTokenExpiry = 0
 }
 
 export function getCredentials(): EbayCredentials | null {
@@ -36,167 +43,285 @@ function incrementApiCalls(): void {
   apiCallsToday++
 }
 
-// Build eBay Finding API URL
-function buildFindingUrl(params: SearchParams): string {
+// ============================================================
+// OAuth 2.0 - Client Credentials Grant (Application Token)
+// ============================================================
+async function getAppToken(): Promise<string> {
+  // Return cached token if still valid (with 60s buffer)
+  if (oauthAppToken && Date.now() < oauthTokenExpiry - 60_000) {
+    return oauthAppToken
+  }
+
+  if (!credentials) throw new Error('No credentials configured')
+
+  const tokenUrl = credentials.environment === 'PRODUCTION'
+    ? 'https://api.ebay.com/identity/v1/oauth2/token'
+    : 'https://api.sandbox.ebay.com/identity/v1/oauth2/token'
+
+  const authString = Buffer.from(`${credentials.appId}:${credentials.certId}`).toString('base64')
+
+  addLog('info', 'Requesting eBay OAuth app token...', null, {
+    environment: credentials.environment,
+    tokenUrl
+  })
+
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${authString}`
+    },
+    body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope'
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    addLog('error', 'OAuth token request failed', null, {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    })
+    throw new Error(`OAuth token error (${response.status}): ${errorText}`)
+  }
+
+  const data = await response.json() as { access_token: string; expires_in: number }
+  oauthAppToken = data.access_token
+  oauthTokenExpiry = Date.now() + data.expires_in * 1000
+
+  addLog('info', `OAuth token acquired, expires in ${data.expires_in}s`)
+  return oauthAppToken
+}
+
+// ============================================================
+// eBay Browse API - Search
+// ============================================================
+function buildBrowseSearchUrl(params: SearchParams): string {
   if (!credentials) throw new Error('No credentials configured')
 
   const base = credentials.environment === 'PRODUCTION'
-    ? 'https://svcs.ebay.com/services/search/FindingService/v1'
-    : 'https://svcs.sandbox.ebay.com/services/search/FindingService/v1'
+    ? 'https://api.ebay.com/buy/browse/v1/item_summary/search'
+    : 'https://api.sandbox.ebay.com/buy/browse/v1/item_summary/search'
 
-  const urlParams = new URLSearchParams({
-    'OPERATION-NAME': 'findItemsAdvanced',
-    'SERVICE-VERSION': '1.13.0',
-    'SECURITY-APPNAME': credentials.appId,
-    'RESPONSE-DATA-FORMAT': 'JSON',
-    'REST-PAYLOAD': '',
-    'GLOBAL-ID': credentials.siteId || 'EBAY-US',
-    keywords: params.keywords,
-    'paginationInput.entriesPerPage': String(params.limit || 50),
-    'paginationInput.pageNumber': String(params.page || 1)
-  })
+  const urlParams = new URLSearchParams()
+
+  // Keywords
+  urlParams.set('q', params.keywords)
+
+  // Pagination
+  urlParams.set('limit', String(params.limit || 50))
+  urlParams.set('offset', String(((params.page || 1) - 1) * (params.limit || 50)))
 
   // Sort
   const sortMap: Record<string, string> = {
-    NewlyListed: 'StartTimeNewest',
-    PriceLow: 'PricePlusShippingLowest',
-    PriceHigh: 'PricePlusShippingHighest',
-    EndingSoon: 'EndTimeSoonest',
-    BestMatch: 'BestMatch'
+    NewlyListed: 'newlyListed',
+    PriceLow: 'price',
+    PriceHigh: '-price',
+    EndingSoon: 'endingSoonest',
+    BestMatch: 'bestMatch'
   }
-  urlParams.set('sortOrder', sortMap[params.sortBy || 'NewlyListed'] || 'StartTimeNewest')
+  urlParams.set('sort', sortMap[params.sortBy || 'BestMatch'] || 'bestMatch')
 
-  // Filters
-  let filterIdx = 0
+  // Build filter string
+  const filters: string[] = []
 
+  // Listing type filter
   if (params.format === 'BuyItNow') {
-    urlParams.set(`itemFilter(${filterIdx}).name`, 'ListingType')
-    urlParams.set(`itemFilter(${filterIdx}).value`, 'FixedPrice')
-    filterIdx++
+    filters.push('buyingOptions:{FIXED_PRICE}')
   } else if (params.format === 'Auction') {
-    urlParams.set(`itemFilter(${filterIdx}).name`, 'ListingType')
-    urlParams.set(`itemFilter(${filterIdx}).value`, 'Auction')
-    filterIdx++
+    filters.push('buyingOptions:{AUCTION}')
   }
 
-  if (params.priceMin != null) {
-    urlParams.set(`itemFilter(${filterIdx}).name`, 'MinPrice')
-    urlParams.set(`itemFilter(${filterIdx}).value`, String(params.priceMin))
-    filterIdx++
-  }
-  if (params.priceMax != null) {
-    urlParams.set(`itemFilter(${filterIdx}).name`, 'MaxPrice')
-    urlParams.set(`itemFilter(${filterIdx}).value`, String(params.priceMax))
-    filterIdx++
+  // Price range filter
+  if (params.priceMin != null || params.priceMax != null) {
+    const min = params.priceMin != null ? params.priceMin : 0
+    const max = params.priceMax != null ? params.priceMax : 999999
+    filters.push(`price:[${min}..${max}],priceCurrency:USD`)
   }
 
-  if (params.freeShippingOnly) {
-    urlParams.set(`itemFilter(${filterIdx}).name`, 'FreeShippingOnly')
-    urlParams.set(`itemFilter(${filterIdx}).value`, 'true')
-    filterIdx++
-  }
-
+  // Condition filter
   if (params.condition && params.condition !== 'Any') {
     const condMap: Record<string, string> = {
-      New: '1000',
-      'Open Box': '1500',
-      Refurbished: '2000',
-      'Used - Like New': '2500',
-      'Used - Good': '3000',
-      'Used - Acceptable': '4000',
-      Used: '3000'
+      New: 'NEW',
+      'Open Box': 'NEW_OTHER',
+      Refurbished: 'SELLER_REFURBISHED',
+      'Used - Like New': 'USED_EXCELLENT',
+      'Used - Good': 'USED_GOOD',
+      'Used - Acceptable': 'USED_ACCEPTABLE',
+      Used: 'USED'
     }
-    if (condMap[params.condition]) {
-      urlParams.set(`itemFilter(${filterIdx}).name`, 'Condition')
-      urlParams.set(`itemFilter(${filterIdx}).value`, condMap[params.condition])
-      filterIdx++
+    const condValue = condMap[params.condition]
+    if (condValue) {
+      filters.push(`conditions:{${condValue}}`)
     }
+  }
+
+  // Delivery / location filters
+  if (params.freeShippingOnly) {
+    filters.push('maxDeliveryCost:0')
   }
 
   if (params.usOnly) {
-    urlParams.set(`itemFilter(${filterIdx}).name`, 'LocatedIn')
-    urlParams.set(`itemFilter(${filterIdx}).value`, 'US')
-    filterIdx++
+    filters.push('itemLocationCountry:US')
   }
 
-  if (params.searchInDesc) {
-    urlParams.set('descriptionSearch', 'true')
+  if (filters.length > 0) {
+    urlParams.set('filter', filters.join(','))
   }
 
+  // Category
   if (params.categoryId) {
-    urlParams.set('categoryId', params.categoryId)
+    urlParams.set('category_ids', params.categoryId)
   }
 
   return `${base}?${urlParams.toString()}`
 }
 
-// Parse eBay Finding API response
-function parseEbayResponse(data: Record<string, unknown>): Omit<Listing, 'id' | 'createdAt'>[] {
+// ============================================================
+// Parse Browse API response
+// ============================================================
+
+interface BrowseItemImage {
+  imageUrl: string
+}
+
+interface BrowseItemPrice {
+  value: string
+  currency: string
+}
+
+interface BrowseItemShippingOption {
+  shippingCost?: BrowseItemPrice
+  type?: string
+}
+
+interface BrowseItemSeller {
+  username?: string
+  feedbackPercentage?: string
+  feedbackScore?: number
+}
+
+interface BrowseItem {
+  itemId: string
+  title: string
+  itemWebUrl: string
+  image?: BrowseItemImage
+  additionalImages?: BrowseItemImage[]
+  price?: BrowseItemPrice
+  shippingOptions?: BrowseItemShippingOption[]
+  condition?: string
+  conditionId?: string
+  seller?: BrowseItemSeller
+  itemCreationDate?: string
+  itemEndDate?: string
+  buyingOptions?: string[]
+  currentBidPrice?: BrowseItemPrice
+  thumbnailImages?: BrowseItemImage[]
+}
+
+interface BrowseSearchResponse {
+  href?: string
+  total?: number
+  next?: string
+  limit?: number
+  offset?: number
+  itemSummaries?: BrowseItem[]
+  warnings?: Array<{ errorId: number; message: string }>
+}
+
+function parseBrowseResponse(data: BrowseSearchResponse): Omit<Listing, 'id' | 'createdAt'>[] {
   try {
-    const response = data as Record<string, unknown>
-    const findResponse = (response['findItemsAdvancedResponse'] as unknown[])?.[0] as Record<string, unknown>
-    const searchResult = (findResponse?.['searchResult'] as unknown[])?.[0] as Record<string, unknown>
-    const items = (searchResult?.['item'] as Record<string, unknown>[]) || []
+    const items = data.itemSummaries || []
+
+    if (items.length === 0 && data.warnings) {
+      addLog('warn', 'Browse API returned warnings', null, {
+        warnings: data.warnings.map(w => w.message)
+      })
+    }
+
+    addLog('info', `Browse API returned ${items.length} items (total: ${data.total || 0})`)
 
     return items.map(item => {
-      const sellingStatus = (item['sellingStatus'] as unknown[])?.[0] as Record<string, unknown>
-      const listingInfo = (item['listingInfo'] as unknown[])?.[0] as Record<string, unknown>
-      const shippingInfo = (item['shippingInfo'] as unknown[])?.[0] as Record<string, unknown>
-      const condition = (item['condition'] as unknown[])?.[0] as Record<string, unknown>
-      const sellerInfo = (item['sellerInfo'] as unknown[])?.[0] as Record<string, unknown>
+      const price = parseFloat(item.price?.value || item.currentBidPrice?.value || '0')
 
-      const currentPrice = (sellingStatus?.['currentPrice'] as unknown[])?.[0] as Record<string, unknown>
-      const price = parseFloat(currentPrice?.['__value__'] as string || '0')
+      // Get shipping cost from first shipping option
+      let shipping = 0
+      if (item.shippingOptions && item.shippingOptions.length > 0) {
+        const cost = item.shippingOptions[0].shippingCost?.value
+        if (cost) shipping = parseFloat(cost)
+      }
 
-      const shippingCost = (shippingInfo?.['shippingServiceCost'] as unknown[])?.[0] as Record<string, unknown>
-      const shipping = parseFloat(shippingCost?.['__value__'] as string || '0')
+      // Collect images
+      const images: string[] = []
+      if (item.image?.imageUrl) images.push(item.image.imageUrl)
+      if (item.additionalImages) {
+        for (const img of item.additionalImages) {
+          if (img.imageUrl) images.push(img.imageUrl)
+        }
+      }
 
-      const galleryURL = (item['galleryURL'] as string[])?.[0] || ''
-      const pictureURLs = (item['pictureURLLarge'] as string[]) || (galleryURL ? [galleryURL] : [])
+      // Map eBay's v3 item IDs: "v1|12345|0" → "12345"
+      const rawId = item.itemId || ''
+      const numericId = rawId.includes('|') ? rawId.split('|')[1] : rawId
 
       return {
-        itemId: (item['itemId'] as string[])?.[0] || '',
+        itemId: numericId,
         monitorId: null,
-        title: (item['title'] as string[])?.[0] || '',
-        url: (item['viewItemURL'] as string[])?.[0] || '',
+        title: item.title || '',
+        url: item.itemWebUrl || '',
         price,
         shipping,
         total: Math.round((price + shipping) * 100) / 100,
-        condition: (condition?.['conditionDisplayName'] as string[])?.[0] || '',
-        sellerName: (sellerInfo?.['sellerUserName'] as string[])?.[0] || '',
-        sellerFeedback: parseInt((sellerInfo?.['feedbackScore'] as string[])?.[0] || '0', 10),
-        returnsAccepted: (item['returnsAccepted'] as string[])?.[0] === 'true',
-        bestOffer: (listingInfo?.['bestOfferEnabled'] as string[])?.[0] === 'true',
-        postedAt: (listingInfo?.['startTime'] as string[])?.[0] || new Date().toISOString(),
+        condition: item.condition || '',
+        sellerName: item.seller?.username || '',
+        sellerFeedback: item.seller?.feedbackScore || 0,
+        returnsAccepted: false, // Not available in summary
+        bestOffer: (item.buyingOptions || []).includes('BEST_OFFER'),
+        postedAt: item.itemCreationDate || new Date().toISOString(),
         foundAt: new Date().toISOString(),
-        images: pictureURLs,
+        images,
         itemSpecifics: {},
         rawJson: JSON.stringify(item)
       }
     })
   } catch (err) {
-    addLog('error', 'Failed to parse eBay response', null, { error: String(err) })
+    addLog('error', 'Failed to parse Browse API response', null, { error: String(err) })
     return []
   }
 }
 
+// ============================================================
+// Main search function
+// ============================================================
 export async function searchListings(params: SearchParams): Promise<Omit<Listing, 'id' | 'createdAt'>[]> {
   if (isMockMode()) {
     addLog('info', `[MOCK] Searching for: ${params.keywords}`)
-    // Simulate network delay
     await new Promise(r => setTimeout(r, 300 + Math.random() * 500))
     return generateMockListings(params)
   }
 
-  // Real eBay API call
   try {
-    const url = buildFindingUrl(params)
+    // Get OAuth token (cached automatically)
+    const token = await getAppToken()
+    const url = buildBrowseSearchUrl(params)
     incrementApiCalls()
 
-    addLog('info', `Searching eBay: ${params.keywords}`, null, { apiCalls: apiCallsToday })
+    addLog('info', `Searching eBay Browse API: ${params.keywords}`, null, {
+      apiCalls: apiCallsToday,
+      url
+    })
 
     const response = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'X-EBAY-C-MARKETPLACE-ID': credentials!.siteId === 'EBAY-US' ? 'EBAY_US'
+          : credentials!.siteId === 'EBAY-GB' ? 'EBAY_GB'
+          : credentials!.siteId === 'EBAY-DE' ? 'EBAY_DE'
+          : credentials!.siteId === 'EBAY-AU' ? 'EBAY_AU'
+          : credentials!.siteId === 'EBAY-CA' ? 'EBAY_CA'
+          : 'EBAY_US',
+        'X-EBAY-C-ENDUSERCTX': 'affiliateCampaignId=<eBayCampaignId>,affiliateReferenceId=<referenceId>',
+        'Content-Type': 'application/json'
+      }
     })
 
     if (response.status === 429) {
@@ -204,12 +329,23 @@ export async function searchListings(params: SearchParams): Promise<Omit<Listing
       throw new Error('RATE_LIMITED')
     }
 
-    if (!response.ok) {
-      throw new Error(`eBay API error: ${response.status} ${response.statusText}`)
+    if (response.status === 401 || response.status === 403) {
+      // Token might be expired, clear cache and try once more
+      oauthAppToken = null
+      oauthTokenExpiry = 0
+      const errorText = await response.text()
+      addLog('error', `eBay auth error (${response.status})`, null, { body: errorText })
+      throw new Error(`eBay auth error (${response.status}): Check your App ID and Cert ID are correct and environment is set to PRODUCTION`)
     }
 
-    const data = await response.json()
-    return parseEbayResponse(data)
+    if (!response.ok) {
+      const errorText = await response.text()
+      addLog('error', `eBay API error: ${response.status}`, null, { body: errorText })
+      throw new Error(`eBay API error: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+
+    const data = await response.json() as BrowseSearchResponse
+    return parseBrowseResponse(data)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     addLog('error', `eBay search failed: ${message}`, null, { params })
@@ -228,15 +364,22 @@ export async function testConnection(): Promise<{ success: boolean; message: str
   }
 
   try {
-    const results = await searchListings({ keywords: 'test', limit: 1 })
+    // First test: can we get an OAuth token?
+    addLog('info', 'Testing connection: requesting OAuth token...')
+    const token = await getAppToken()
+    addLog('info', `Token acquired: ${token.slice(0, 20)}...`)
+
+    // Second test: can we search?
+    const results = await searchListings({ keywords: 'test', limit: 3 })
     return {
       success: true,
-      message: `Connected to eBay API. Test returned ${results.length} result(s).`
+      message: `Connected to eBay Browse API (${credentials!.environment}). Test returned ${results.length} result(s).`
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     return {
       success: false,
-      message: `Connection failed: ${err instanceof Error ? err.message : String(err)}`
+      message: `Connection failed: ${message}`
     }
   }
 }
