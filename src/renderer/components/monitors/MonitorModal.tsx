@@ -1,15 +1,17 @@
 import React, { useState, useCallback } from 'react'
 import {
-  TestTube, X, ChevronDown, ChevronUp, FolderOpen, Info, Zap
+  TestTube, X, ChevronDown, ChevronUp, FolderOpen, Info, Zap, AlertCircle
 } from 'lucide-react'
 import { Dialog } from '../ui/dialog'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { Toggle } from '../ui/toggle'
+import { Badge } from '../ui/badge'
 import { CategoryCombobox } from '../ui/CategoryCombobox'
 import { CategoryExplorer } from '../ui/CategoryExplorer'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { useLicenseStore } from '@/stores/licenseStore'
 import { invoke } from '@/hooks/useIpc'
 import { formatPrice, cn } from '@/lib/utils'
 import type { Monitor, MonitorCreateInput, TestSearchPreview } from '@shared/types'
@@ -92,7 +94,9 @@ const DEFAULT_FORM: FormState = {
 }
 
 export function MonitorModal({ open, onClose, onCreated, editMonitor }: MonitorModalProps): React.JSX.Element {
-  const { createMonitor, updateMonitor } = useMonitorStore()
+  const { createMonitor, updateMonitor, monitors } = useMonitorStore()
+  const { entitlements, setShowActivateModal } = useLicenseStore()
+  const monitorLimitReached = !editMonitor && monitors.length >= entitlements.maxMonitors
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestSearchPreview | null>(null)
@@ -172,7 +176,7 @@ export function MonitorModal({ open, onClose, onCreated, editMonitor }: MonitorM
     totalPriceMode: false,
     allowSellers: [],
     denySellers: [],
-    intervalSec: Math.max(10, Number(form.intervalSec) || 60),
+    intervalSec: Math.max(entitlements.minIntervalSec, Number(form.intervalSec) || 60),
     viewType: form.viewType,
     site: 'EBAY-US',
     locatedIn: '',
@@ -476,6 +480,15 @@ export function MonitorModal({ open, onClose, onCreated, editMonitor }: MonitorM
             </div>
           )}
 
+          {/* Monitor limit warning */}
+          {monitorLimitReached && (
+            <Badge variant="warning" className="text-xs py-1.5 px-3 justify-start">
+              <AlertCircle size={12} className="mr-1.5 shrink-0" />
+              Monitor limit reached ({entitlements.maxMonitors}).{' '}
+              <button className="underline ml-1" onClick={() => { onClose(); setShowActivateModal(true) }}>Upgrade</button>
+            </Badge>
+          )}
+
           {/* Actions */}
           <div className="flex gap-2 mt-1">
             <Button size="xs" variant="outline" onClick={handleTestMonitor} disabled={testing || !form.keywords.trim()}>
@@ -486,7 +499,7 @@ export function MonitorModal({ open, onClose, onCreated, editMonitor }: MonitorM
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving || !form.keywords.trim()}>
+            <Button onClick={handleSave} disabled={saving || !form.keywords.trim() || monitorLimitReached}>
               {saving ? 'Saving...' : editMonitor ? 'Update Monitor' : 'Create Monitor'}
             </Button>
           </div>

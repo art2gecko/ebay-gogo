@@ -9,9 +9,11 @@ import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { Badge } from '../ui/badge'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import { LicenseStatusPill } from '@/features/licensing/LicenseStatusPill'
 import { useSearchStore } from '@/stores/searchStore'
 import { useAppStore } from '@/stores/appStore'
 import { useViewStore } from '@/stores/viewStore'
+import { useLicenseStore } from '@/stores/licenseStore'
 import { timeAgo } from '@/lib/utils'
 import { invoke } from '@/hooks/useIpc'
 
@@ -33,6 +35,8 @@ export function TopBar({ onSaveMonitor, onCreateView, onManageViews }: TopBarPro
   const { query, setQuery, sortBy, setSortBy, runSearch, loading, clearSession, dismissAll, showDismissed, setShowDismissed } = useSearchStore()
   const { engineStatus, startEngine, stopEngine, fetchEngineStatus, activeTab, setActiveTab } = useAppStore()
   const { views, activeViewId, setActiveView } = useViewStore()
+  const { entitlements, setShowActivateModal } = useLicenseStore()
+  const engineAllowed = entitlements.status === 'trial' || entitlements.status === 'active' || entitlements.status === 'grace'
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false)
   const [clearMenuOpen, setClearMenuOpen] = useState(false)
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false)
@@ -221,13 +225,20 @@ export function TopBar({ onSaveMonitor, onCreateView, onManageViews }: TopBarPro
             Stop
           </Button>
         ) : (
-          <Button size="xs" variant="secondary" onClick={startEngine}>
+          <Button
+            size="xs"
+            variant="secondary"
+            onClick={engineAllowed ? startEngine : () => setShowActivateModal(true)}
+            title={engineAllowed ? 'Start monitoring engine' : 'License required to start engine'}
+          >
             <Play size={12} className="mr-1" />
             Start
           </Button>
         )}
 
         <ThemeToggle />
+
+        <LicenseStatusPill />
 
         {/* Status pill - clickable with popover */}
         <div ref={statusRef} className="relative flex items-center gap-2 shrink-0 ml-auto">

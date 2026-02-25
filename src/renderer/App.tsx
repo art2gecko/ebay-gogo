@@ -6,17 +6,21 @@ import { MonitorsTab } from './components/monitors/MonitorsTab'
 import { HistoryTab } from './components/history/HistoryTab'
 import { SettingsTab } from './components/settings/SettingsTab'
 import { ToastContainer } from './components/ui/Toast'
+import { ActivateLicenseModal } from './features/licensing/ActivateLicenseModal'
 import { useAppStore } from './stores/appStore'
 import { useMonitorStore } from './stores/monitorStore'
 import { useSearchStore } from './stores/searchStore'
 import { useViewStore } from './stores/viewStore'
+import { useLicenseStore } from './stores/licenseStore'
 import { useIpcEvent } from './hooks/useIpc'
 import type { EngineStatus, Listing, Monitor } from '@shared/types'
+import type { Entitlements } from '@shared/licensingTypes'
 
 export default function App(): React.JSX.Element {
   const { activeTab, fetchEngineStatus, setEngineStatus } = useAppStore()
   const { fetchMonitors, updateMonitorInList } = useMonitorStore()
   const { fetchViews } = useViewStore()
+  const { fetchEntitlements, setEntitlements } = useLicenseStore()
   const [showSaveMonitor, setShowSaveMonitor] = useState(false)
   const [showCreateView, setShowCreateView] = useState(false)
   const [showManageViews, setShowManageViews] = useState(false)
@@ -25,8 +29,9 @@ export default function App(): React.JSX.Element {
     fetchEngineStatus()
     fetchMonitors()
     fetchViews()
+    fetchEntitlements()
     useSearchStore.getState().loadPersistedPrefs()
-  }, [fetchEngineStatus, fetchMonitors, fetchViews])
+  }, [fetchEngineStatus, fetchMonitors, fetchViews, fetchEntitlements])
 
   const handleStatusChanged = useCallback((status: EngineStatus) => {
     setEngineStatus(status)
@@ -45,9 +50,14 @@ export default function App(): React.JSX.Element {
     updateMonitorInList(monitor)
   }, [updateMonitorInList])
 
+  const handleEntitlementsChanged = useCallback((ent: Entitlements) => {
+    setEntitlements(ent)
+  }, [setEntitlements])
+
   useIpcEvent('engine:status-changed', handleStatusChanged)
   useIpcEvent('engine:new-listings', handleNewListings)
   useIpcEvent('monitor:updated', handleMonitorUpdated)
+  useIpcEvent('license:entitlements-changed', handleEntitlementsChanged)
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -73,6 +83,7 @@ export default function App(): React.JSX.Element {
         {activeTab === 'settings' && <SettingsTab />}
       </main>
       <ToastContainer />
+      <ActivateLicenseModal />
     </div>
   )
 }

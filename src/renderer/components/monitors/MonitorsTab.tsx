@@ -7,6 +7,7 @@ import { Input } from '../ui/input'
 import { MonitorModal } from './MonitorModal'
 import { showToast } from '../ui/Toast'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { useLicenseStore } from '@/stores/licenseStore'
 import { useAppStore } from '@/stores/appStore'
 import { timeAgo } from '@/lib/utils'
 import type { Monitor, MonitorCreateInput } from '@shared/types'
@@ -16,6 +17,8 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 export function MonitorsTab(): React.JSX.Element {
   const { monitors, fetchMonitors, updateMonitor, deleteMonitor, createMonitor } = useMonitorStore()
+  const { entitlements, setShowActivateModal } = useLicenseStore()
+  const monitorLimitReached = monitors.length >= entitlements.maxMonitors
   const theme = useAppStore((s) => s.theme)
   const [showModal, setShowModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -178,12 +181,22 @@ export function MonitorsTab(): React.JSX.Element {
               className="h-7 text-xs pl-7"
             />
           </div>
-          <Button size="xs" onClick={handleQuickCreate} disabled={!quickKeywords.trim() || quickCreating}>
+          <Button
+            size="xs"
+            onClick={monitorLimitReached ? () => setShowActivateModal(true) : handleQuickCreate}
+            disabled={!quickKeywords.trim() || quickCreating}
+            title={monitorLimitReached ? `Monitor limit (${entitlements.maxMonitors}) reached` : undefined}
+          >
             <Plus size={12} className="mr-1" />
             Add
           </Button>
         </div>
-        <Button size="xs" variant="outline" onClick={() => setShowModal(true)}>
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={monitorLimitReached ? () => setShowActivateModal(true) : () => setShowModal(true)}
+          title={monitorLimitReached ? `Monitor limit (${entitlements.maxMonitors}) reached` : undefined}
+        >
           <Plus size={12} className="mr-1" />
           Advanced
         </Button>

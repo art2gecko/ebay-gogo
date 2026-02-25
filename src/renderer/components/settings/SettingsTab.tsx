@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { Toggle } from '../ui/toggle'
 import { Badge } from '../ui/badge'
+import { LicenseSettingsPanel } from '@/features/licensing/LicenseSettingsPanel'
 import { useAppStore } from '@/stores/appStore'
 import { invoke } from '@/hooks/useIpc'
 
@@ -152,6 +153,9 @@ export function SettingsTab(): React.JSX.Element {
   return (
     <div className="flex-1 overflow-y-auto p-6 max-w-2xl">
       <h2 className="text-lg font-semibold mb-6">Settings</h2>
+
+      {/* License */}
+      <LicenseSettingsPanel />
 
       {/* eBay Credentials */}
       <section className="mb-8">

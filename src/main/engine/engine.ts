@@ -3,6 +3,7 @@ import {
   listMonitors, updateMonitorStatus, upsertListings, addLog
 } from '../db/database'
 import { searchListings, isMockMode, getApiCallsToday } from '../ebay/client'
+import { canStartEngine } from '../licensing/licensingManager'
 import type { Monitor, Listing, EngineStatus, SearchParams } from '@shared/types'
 
 const MAX_CONCURRENCY = 3
@@ -131,6 +132,11 @@ function scheduleMonitor(monitor: Monitor): void {
 
 export function startEngine(): boolean {
   if (running) return true
+
+  if (!canStartEngine()) {
+    addLog('warn', 'Engine start blocked — license status does not allow monitoring')
+    return false
+  }
 
   running = true
   addLog('info', 'Engine started')

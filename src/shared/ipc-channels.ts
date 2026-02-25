@@ -9,6 +9,7 @@ import type {
   TestSearchPreview,
   View, ViewCreateInput, ViewUpdateInput
 } from './types'
+import type { Entitlements, LicenseActivateResult, LicenseDeactivateResult } from './licensingTypes'
 
 // Request-Response channels (invoke/handle)
 export interface IpcChannels {
@@ -80,6 +81,13 @@ export interface IpcChannels {
   'views:update': { request: ViewUpdateInput; response: View }
   'views:delete': { request: string; response: boolean }
   'views:setDefault': { request: string; response: boolean }
+
+  // Licensing
+  'license:getEntitlements': { request: void; response: Entitlements }
+  'license:activate': { request: { licenseKey: string }; response: LicenseActivateResult }
+  'license:deactivate': { request: void; response: LicenseDeactivateResult }
+  'license:getDeviceId': { request: void; response: string }
+  'license:refresh': { request: void; response: Entitlements }
 }
 
 // Event channels (main -> renderer, one-way streaming)
@@ -88,6 +96,7 @@ export interface IpcEvents {
   'engine:new-listings': Listing[]
   'engine:error': { monitorId: number | null; message: string }
   'monitor:updated': Monitor
+  'license:entitlements-changed': Entitlements
 }
 
 // Channel name literal types for type safety

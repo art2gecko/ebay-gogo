@@ -6,6 +6,8 @@ import { setCredentials } from './ebay/client'
 import { setMainWindow } from './engine/engine'
 import { ensureCategoriesLoaded } from './ebay/taxonomy'
 import { getCredentials } from './store'
+import { registerLicensingIpcHandlers } from './licensing/licensingIpc'
+import { initializeLicensing, setLicensingWindow, cleanup as cleanupLicensing } from './licensing/licensingManager'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -65,9 +67,16 @@ app.whenReady().then(async () => {
 
   // Register IPC handlers
   registerIpcHandlers()
+  registerLicensingIpcHandlers()
 
   // Create window
   createWindow()
+
+  // Initialize licensing after window is created
+  if (mainWindow) {
+    setLicensingWindow(mainWindow)
+  }
+  await initializeLicensing()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -77,6 +86,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  cleanupLicensing()
   if (process.platform !== 'darwin') {
     app.quit()
   }
