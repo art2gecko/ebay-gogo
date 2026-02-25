@@ -11,7 +11,13 @@ let oauthAppToken: string | null = null
 let oauthTokenExpiry = 0
 
 export function setCredentials(creds: EbayCredentials): void {
-  credentials = creds
+  credentials = {
+    ...creds,
+    // Trim whitespace/newlines from tokens — eBay tokens often get pasted with trailing whitespace
+    oauthToken: creds.oauthToken?.trim() || '',
+    appId: creds.appId?.trim() || '',
+    certId: creds.certId?.trim() || ''
+  }
   // Invalidate cached token when credentials change
   oauthAppToken = null
   oauthTokenExpiry = 0
@@ -91,6 +97,13 @@ async function getAppToken(): Promise<string> {
       statusText: response.statusText,
       body: errorText
     })
+    if (response.status === 401 && errorText.includes('invalid_client')) {
+      throw new Error(
+        'Client authentication failed (invalid_client). Your App ID or Cert ID may be incorrect, ' +
+        'or your eBay app may be "Non Compliant". Fix: go to developer.ebay.com → your app → ' +
+        '"Get OAuth Application Token" → copy the token → paste it into the OAuth Token field.'
+      )
+    }
     throw new Error(`OAuth token error (${response.status}): ${errorText}`)
   }
 
@@ -375,7 +388,10 @@ export async function testConnection(): Promise<{ success: boolean; message: str
 
   try {
     // First test: can we get an OAuth token?
-    addLog('info', 'Testing connection: requesting OAuth token...')
+    const authMethod = credentials?.oauthToken
+      ? 'manual OAuth token'
+      : 'Client Credentials (App ID + Cert ID)'
+    addLog('info', `Testing connection using ${authMethod}...`)
     const token = await getAppToken()
     addLog('info', `Token acquired: ${token.slice(0, 20)}...`)
 
