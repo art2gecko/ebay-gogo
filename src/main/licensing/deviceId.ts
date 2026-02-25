@@ -23,22 +23,14 @@ function getOrCreateFallbackId(): string {
   return id
 }
 
-async function getRawDeviceId(): Promise<string> {
-  // Try node-machine-id if available
-  try {
-    const { machineIdSync } = await import('node-machine-id')
-    return machineIdSync(true)
-  } catch {
-    // node-machine-id not installed, use fallback
-  }
-
+function getRawDeviceId(): string {
   return getOrCreateFallbackId()
 }
 
-export async function getDeviceId(): Promise<string> {
+export function getDeviceId(): string {
   if (cachedDeviceId) return cachedDeviceId
 
-  const raw = await getRawDeviceId()
+  const raw = getRawDeviceId()
   const id = createHash('sha256').update(raw).digest('hex')
   cachedDeviceId = id
   return id

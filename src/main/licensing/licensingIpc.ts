@@ -23,9 +23,7 @@ export function registerLicensingIpcHandlers(): void {
     return deactivate()
   })
 
-  handle('license:getDeviceId', async () => {
-    return getDeviceId()
-  })
+  handle('license:getDeviceId', () => getDeviceId())
 
   handle('license:refresh', async () => {
     return refreshEntitlements()
