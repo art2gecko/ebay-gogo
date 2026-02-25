@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Listing, SearchParams } from '@shared/types'
 import { invoke } from '../hooks/useIpc'
+import { showToast } from '../components/ui/Toast'
 
 interface SearchStore {
   // Search state
@@ -34,9 +35,22 @@ interface SearchStore {
   selectedListing: Listing | null
   setSelectedListing: (listing: Listing | null) => void
 
-  // Actions
+  // Dismiss with undo
+  showDismissed: boolean
+  setShowDismissed: (v: boolean) => void
+  dismissItems: (itemIds: string[]) => Promise<void>
+  undoDismiss: (itemIds: string[]) => Promise<void>
+  dismissAll: () => Promise<void>
+  clearSession: () => void
+
+  // Actions with undo
   addExcludeKeyword: (keyword: string) => Promise<void>
+  removeExcludeKeyword: (keyword: string) => void
   ignoreSeller: (sellerName: string) => Promise<void>
+
+  // Density preference
+  density: 'compact' | 'comfortable'
+  setDensity: (d: 'compact' | 'comfortable') => void
 }
 
 const defaultFilters: SearchStore['filters'] = {
@@ -100,6 +114,47 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   selectedListing: null,
   setSelectedListing: (listing) => set({ selectedListing: listing }),
 
+  // Dismiss
+  showDismissed: false,
+  setShowDismissed: (v) => set({ showDismissed: v }),
+
+  dismissItems: async (itemIds) => {
+    await invoke('listings:dismiss', { itemIds })
+    const now = new Date().toISOString()
+    set(s => ({
+      results: s.results.map(r => itemIds.includes(r.itemId) ? { ...r, dismissedAt: now } : r)
+    }))
+    showToast(`Dismissed ${itemIds.length} item${itemIds.length > 1 ? 's' : ''}`, () => {
+      get().undoDismiss(itemIds)
+    })
+  },
+
+  undoDismiss: async (itemIds) => {
+    await invoke('listings:undoDismiss', { itemIds })
+    set(s => ({
+      results: s.results.map(r => itemIds.includes(r.itemId) ? { ...r, dismissedAt: null } : r)
+    }))
+  },
+
+  dismissAll: async () => {
+    const { results, showDismissed } = get()
+    const visible = showDismissed ? results : results.filter(r => !r.dismissedAt)
+    const itemIds = visible.map(r => r.itemId)
+    if (itemIds.length === 0) return
+    await invoke('listings:dismiss', { itemIds })
+    const now = new Date().toISOString()
+    set(s => ({
+      results: s.results.map(r => itemIds.includes(r.itemId) ? { ...r, dismissedAt: now } : r)
+    }))
+    showToast(`Dismissed ${itemIds.length} items`, () => {
+      get().undoDismiss(itemIds)
+    })
+  },
+
+  clearSession: () => {
+    set({ results: [], selectedListing: null })
+  },
+
   addExcludeKeyword: async (keyword) => {
     const { filters } = get()
     if (filters.excludeKeywords.includes(keyword)) return
@@ -110,14 +165,44 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         excludeKeywords: [...s.filters.excludeKeywords, keyword]
       }
     }))
+    showToast(`Excluded keyword: "${keyword}"`, () => {
+      get().removeExcludeKeyword(keyword)
+    })
+  },
+
+  removeExcludeKeyword: (keyword) => {
+    set((s) => ({
+      filters: {
+        ...s.filters,
+        excludeKeywords: s.filters.excludeKeywords.filter(k => k !== keyword)
+      }
+    }))
   },
 
   ignoreSeller: async (sellerName) => {
     await invoke('sellers:ignore', { sellerName })
-    // Remove listings from this seller from results
+    const removedListings = get().results.filter(l => l.sellerName === sellerName)
     set((s) => ({
       results: s.results.filter((l) => l.sellerName !== sellerName),
       selectedListing: s.selectedListing?.sellerName === sellerName ? null : s.selectedListing
     }))
+    showToast(`Ignored seller: ${sellerName}`, async () => {
+      await invoke('sellers:unignore', { sellerName })
+      set((s) => ({ results: [...removedListings, ...s.results] }))
+    })
+  },
+
+  // Density
+  density: 'comfortable',
+  setDensity: (d) => {
+    set({ density: d })
+    invoke('appState:set', { key: 'gridDensity', value: d }).catch(() => {})
   }
 }))
+
+// Load persisted density on startup
+invoke('appState:get', 'gridDensity').then(val => {
+  if (val === 'compact' || val === 'comfortable') {
+    useSearchStore.setState({ density: val })
+  }
+}).catch(() => {})

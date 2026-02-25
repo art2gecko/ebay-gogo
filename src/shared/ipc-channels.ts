@@ -29,9 +29,14 @@ export interface IpcChannels {
 
   // Dismiss / Delete
   'listings:dismiss': { request: { itemIds: string[] }; response: number }
+  'listings:undoDismiss': { request: { itemIds: string[] }; response: number }
   'listings:dismissByView': { request: { monitorIds?: number[]; groupNames?: string[] }; response: number }
   'listings:resetDismissed': { request: { monitorIds?: number[]; groupNames?: string[] }; response: number }
   'listings:deleteByScope': { request: { scope: 'view' | 'monitor' | 'group' | 'all'; monitorId?: number; groupName?: string }; response: number }
+
+  // App State (for persisting UI preferences)
+  'appState:get': { request: string; response: string | null }
+  'appState:set': { request: { key: string; value: string }; response: boolean }
 
   // Engine
   'engine:start': { request: void; response: boolean }

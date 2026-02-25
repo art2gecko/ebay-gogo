@@ -12,12 +12,13 @@ import { CategoryExplorer } from '../ui/CategoryExplorer'
 import { useMonitorStore } from '@/stores/monitorStore'
 import { invoke } from '@/hooks/useIpc'
 import { formatPrice, cn } from '@/lib/utils'
-import type { MonitorCreateInput, TestSearchPreview } from '@shared/types'
+import type { Monitor, MonitorCreateInput, TestSearchPreview } from '@shared/types'
 
 interface MonitorModalProps {
   open: boolean
   onClose: () => void
   onCreated?: (monitorId: number) => void
+  editMonitor?: Monitor | null
 }
 
 const FORMAT_OPTIONS = [
@@ -90,8 +91,8 @@ const DEFAULT_FORM: FormState = {
   categoryId: '', categoryPath: '', includeSubcategories: false
 }
 
-export function MonitorModal({ open, onClose, onCreated }: MonitorModalProps): React.JSX.Element {
-  const { createMonitor } = useMonitorStore()
+export function MonitorModal({ open, onClose, onCreated, editMonitor }: MonitorModalProps): React.JSX.Element {
+  const { createMonitor, updateMonitor } = useMonitorStore()
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestSearchPreview | null>(null)
@@ -99,7 +100,34 @@ export function MonitorModal({ open, onClose, onCreated }: MonitorModalProps): R
   const [excludeInput, setExcludeInput] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showExplorer, setShowExplorer] = useState(false)
-  const [form, setForm] = useState<FormState>({ ...DEFAULT_FORM })
+
+  const editForm: FormState | undefined = editMonitor ? {
+    keywords: editMonitor.keywords.join(', '),
+    group: editMonitor.group,
+    priceMin: editMonitor.priceMin != null ? String(editMonitor.priceMin) : '',
+    priceMax: editMonitor.priceMax != null ? String(editMonitor.priceMax) : '',
+    condition: editMonitor.condition,
+    format: editMonitor.format,
+    freeShippingOnly: editMonitor.freeShippingOnly,
+    sellerMinFeedback: editMonitor.sellerMinFeedback ? String(editMonitor.sellerMinFeedback) : '',
+    usOnly: editMonitor.usOnly,
+    intervalSec: String(editMonitor.intervalSec),
+    viewType: editMonitor.viewType,
+    searchInDesc: editMonitor.searchInDesc,
+    categoryId: editMonitor.categoryId,
+    categoryPath: editMonitor.categoryPath,
+    includeSubcategories: editMonitor.includeSubcategories
+  } : undefined
+
+  const [form, setForm] = useState<FormState>(editForm || { ...DEFAULT_FORM })
+
+  // Re-initialize form when editMonitor changes
+  React.useEffect(() => {
+    if (editMonitor) {
+      setForm(editForm!)
+      setExcludeChips([...editMonitor.excludeKeywords])
+    }
+  }, [editMonitor?.id])
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
     setForm((f) => ({ ...f, [key]: value }))
@@ -173,8 +201,12 @@ export function MonitorModal({ open, onClose, onCreated }: MonitorModalProps): R
     if (!form.keywords.trim()) return
     setSaving(true)
     try {
-      const monitor = await createMonitor(buildInput())
-      onCreated?.(monitor.id)
+      if (editMonitor) {
+        await updateMonitor({ id: editMonitor.id, ...buildInput() })
+      } else {
+        const monitor = await createMonitor(buildInput())
+        onCreated?.(monitor.id)
+      }
       onClose()
       resetForm()
     } finally {
@@ -209,7 +241,7 @@ export function MonitorModal({ open, onClose, onCreated }: MonitorModalProps): R
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} title="New Monitor" className="max-w-lg">
+      <Dialog open={open} onClose={onClose} title={editMonitor ? 'Edit Monitor' : 'New Monitor'} className="max-w-lg">
         <div className="flex flex-col gap-3" onKeyDown={handleModalKeyDown}>
           {/* Presets */}
           <div className="flex flex-wrap gap-1.5">
@@ -455,7 +487,7 @@ export function MonitorModal({ open, onClose, onCreated }: MonitorModalProps): R
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={saving || !form.keywords.trim()}>
-              {saving ? 'Saving...' : 'Create Monitor'}
+              {saving ? 'Saving...' : editMonitor ? 'Update Monitor' : 'Create Monitor'}
             </Button>
           </div>
 

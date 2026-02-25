@@ -26,7 +26,6 @@ export function SearchLayout({
 }: SearchLayoutProps): React.JSX.Element {
   const { results, loading } = useSearchStore()
   const [showMonitorModal, setShowMonitorModal] = useState(false)
-  const [showDismissed, setShowDismissed] = useState(false)
 
   const isModalOpen = showMonitorModal || (showSaveMonitor ?? false)
   const closeModal = (): void => {
@@ -39,7 +38,6 @@ export function SearchLayout({
   const startPosRef = useRef(0)
   const startSizeRef = useRef(0)
 
-  // Use refs for sizes to avoid stale closure in mouse handlers
   const bottomHeightRef = useRef(bottomHeight)
   const rightWidthRef = useRef(rightWidth)
   bottomHeightRef.current = bottomHeight
@@ -88,7 +86,7 @@ export function SearchLayout({
           {/* Center: Results grid or empty state */}
           <div className="flex-1 flex flex-col min-w-0">
             {hasResults ? (
-              <ResultsGrid showDismissed={showDismissed} onToggleShowDismissed={() => setShowDismissed(!showDismissed)} />
+              <ResultsGrid />
             ) : (
               <EmptyState onCreateMonitor={() => setShowMonitorModal(true)} />
             )}

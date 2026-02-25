@@ -6,7 +6,8 @@ import {
   searchCategories, getRecentCategories, trackCategoryUsage, getCategoryCount,
   getTopLevelCategories, getChildrenCategories, getFavoriteCategories, toggleFavoriteCategory,
   listViews, getView, createView, updateView, deleteView, setDefaultView,
-  dismissListings, dismissByView, resetDismissed, deleteListingsByScope
+  dismissListings, undoDismissListings, dismissByView, resetDismissed, deleteListingsByScope,
+  getAppState, setAppState
 } from '../db/database'
 import { searchListings, setCredentials, testConnection } from '../ebay/client'
 import { startEngine, stopEngine, getStatus, refreshMonitors } from '../engine/engine'
@@ -181,9 +182,16 @@ export function registerIpcHandlers(): void {
   // Dismiss / Delete
   // ============================================================
   handle('listings:dismiss', (_e, { itemIds }) => dismissListings(itemIds))
+  handle('listings:undoDismiss', (_e, { itemIds }) => undoDismissListings(itemIds))
   handle('listings:dismissByView', (_e, params) => dismissByView(params.monitorIds, params.groupNames))
   handle('listings:resetDismissed', (_e, params) => resetDismissed(params.monitorIds, params.groupNames))
   handle('listings:deleteByScope', (_e, params) => deleteListingsByScope(params.scope, params.monitorId, params.groupName))
+
+  // ============================================================
+  // App State
+  // ============================================================
+  handle('appState:get', (_e, key) => getAppState(key))
+  handle('appState:set', (_e, { key, value }) => { setAppState(key, value); return true })
 
   // ============================================================
   // Shell operations (not IPC channel, direct)

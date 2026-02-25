@@ -905,6 +905,18 @@ export function setDefaultView(id: string): boolean {
 // Dismiss / Delete Operations
 // ============================================================
 
+export function undoDismissListings(itemIds: string[]): number {
+  let count = 0
+  const undoDismiss = getDb().transaction((ids: string[]) => {
+    for (const itemId of ids) {
+      const result = getDb().prepare('UPDATE listings SET dismissedAt = NULL WHERE itemId = ?').run(itemId)
+      count += result.changes
+    }
+  })
+  undoDismiss(itemIds)
+  return count
+}
+
 export function dismissListings(itemIds: string[]): number {
   const now = new Date().toISOString()
   let count = 0

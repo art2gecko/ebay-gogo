@@ -5,6 +5,7 @@ import { SearchLayout } from './components/search/SearchLayout'
 import { MonitorsTab } from './components/monitors/MonitorsTab'
 import { HistoryTab } from './components/history/HistoryTab'
 import { SettingsTab } from './components/settings/SettingsTab'
+import { ToastContainer } from './components/ui/Toast'
 import { useAppStore } from './stores/appStore'
 import { useMonitorStore } from './stores/monitorStore'
 import { useSearchStore } from './stores/searchStore'
@@ -43,10 +44,6 @@ export default function App(): React.JSX.Element {
     updateMonitorInList(monitor)
   }, [updateMonitorInList])
 
-  const handleClearResults = useCallback(() => {
-    useSearchStore.setState({ results: [] })
-  }, [])
-
   useIpcEvent('engine:status-changed', handleStatusChanged)
   useIpcEvent('engine:new-listings', handleNewListings)
   useIpcEvent('monitor:updated', handleMonitorUpdated)
@@ -55,7 +52,6 @@ export default function App(): React.JSX.Element {
     <div className="h-screen flex flex-col overflow-hidden">
       <TopBar
         onSaveMonitor={() => setShowSaveMonitor(true)}
-        onClearResults={handleClearResults}
         onCreateView={() => setShowCreateView(true)}
         onManageViews={() => setShowManageViews(true)}
       />
@@ -75,6 +71,7 @@ export default function App(): React.JSX.Element {
         {activeTab === 'history' && <HistoryTab />}
         {activeTab === 'settings' && <SettingsTab />}
       </main>
+      <ToastContainer />
     </div>
   )
 }
