@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eBay-GoGo — Real-Time eBay Monitoring for Savvy Buyers</title>
+  <meta name="description" content="Monitor up to 50 eBay searches simultaneously. Get instant desktop alerts when new deals appear. Keyboard-first workflow for power users.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue-50: #eff6ff;
+      --blue-100: #dbeafe;
+      --blue-200: #bfdbfe;
+      --blue-400: #60a5fa;
+      --blue-500: #3b82f6;
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-400: #9ca3af;
+      --gray-500: #6b7280;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --gray-950: #030712;
+      --amber-400: #fbbf24;
+      --amber-500: #f59e0b;
+      --green-400: #4ade80;
+      --green-500: #22c55e;
+      --red-400: #f87171;
+      --purple-500: #a855f7;
+      --radius: 0.75rem;
+      --radius-lg: 1rem;
+      --radius-xl: 1.5rem;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: var(--gray-800);
+      background: #fff;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- Utility ---- */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    .text-gradient {
+      background: linear-gradient(135deg, var(--blue-600), var(--purple-500));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ---- Nav ---- */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--gray-100);
+      transition: box-shadow 0.3s;
+    }
+    nav.scrolled { box-shadow: 0 1px 12px rgba(0,0,0,0.06); }
+    .nav-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px; max-width: 1200px; margin: 0 auto; padding: 0 24px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 20px; font-weight: 700; color: var(--gray-900);
+      text-decoration: none;
+    }
+    .nav-logo svg { color: var(--blue-600); }
+    .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+    .nav-links a {
+      font-size: 14px; font-weight: 500; color: var(--gray-600);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--gray-900); }
+    .nav-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 20px; border-radius: 8px;
+      background: var(--blue-600); color: #fff !important;
+      font-size: 14px; font-weight: 600; transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--blue-700); }
+    .mobile-toggle { display: none; background: none; border: none; cursor: pointer; padding: 4px; }
+
+    /* ---- Hero ---- */
+    .hero {
+      padding: 140px 0 80px;
+      text-align: center;
+      background: linear-gradient(180deg, var(--blue-50) 0%, #fff 100%);
+      overflow: hidden;
+      position: relative;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 100px;
+      background: var(--blue-100); color: var(--blue-700);
+      font-size: 13px; font-weight: 600; margin-bottom: 24px;
+    }
+    .hero-badge svg { width: 14px; height: 14px; }
+    .hero h1 {
+      font-size: clamp(36px, 5vw, 64px); font-weight: 800;
+      line-height: 1.1; letter-spacing: -0.02em;
+      color: var(--gray-950); max-width: 800px; margin: 0 auto 20px;
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px); color: var(--gray-500);
+      max-width: 600px; margin: 0 auto 40px; line-height: 1.7;
+    }
+    .hero-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;
+      text-decoration: none; transition: all 0.2s; border: none; cursor: pointer;
+    }
+    .btn-primary {
+      background: var(--blue-600); color: #fff;
+      box-shadow: 0 1px 2px rgba(37,99,235,0.2), 0 4px 12px rgba(37,99,235,0.15);
+    }
+    .btn-primary:hover { background: var(--blue-700); transform: translateY(-1px); box-shadow: 0 2px 4px rgba(37,99,235,0.2), 0 8px 20px rgba(37,99,235,0.2); }
+    .btn-secondary {
+      background: #fff; color: var(--gray-700);
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
+    .btn svg { width: 18px; height: 18px; }
+
+    .hero-visual {
+      margin-top: 64px; position: relative;
+      max-width: 1000px; margin-left: auto; margin-right: auto;
+    }
+    .hero-screenshot {
+      width: 100%; border-radius: var(--radius-xl);
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.04), 0 24px 60px rgba(0,0,0,0.08);
+      background: var(--gray-900);
+      aspect-ratio: 16/9.5;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    .app-mockup {
+      width: 100%; height: 100%; display: flex; flex-direction: column;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+      color: var(--gray-300); background: var(--gray-950);
+    }
+    .mockup-topbar {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      background: var(--gray-900); border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .mockup-dots { display: flex; gap: 6px; }
+    .mockup-dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .mockup-dots span:nth-child(1) { background: #ff5f57; }
+    .mockup-dots span:nth-child(2) { background: #febc2e; }
+    .mockup-dots span:nth-child(3) { background: #28c840; }
+    .mockup-title {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--gray-300);
+    }
+    .mockup-title svg { color: var(--blue-400); }
+    .mockup-tabs {
+      display: flex; gap: 0; padding: 0 16px;
+      background: var(--gray-900); border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .mockup-tab {
+      padding: 8px 16px; font-size: 11px; color: var(--gray-500);
+      border-bottom: 2px solid transparent;
+    }
+    .mockup-tab.active { color: var(--blue-400); border-bottom-color: var(--blue-400); }
+    .mockup-body { flex: 1; display: flex; overflow: hidden; }
+    .mockup-sidebar {
+      width: 180px; padding: 12px; border-right: 1px solid rgba(255,255,255,0.06);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .mockup-filter {
+      padding: 6px 8px; background: rgba(255,255,255,0.04); border-radius: 4px;
+      font-size: 10px; color: var(--gray-400);
+    }
+    .mockup-filter-val { color: var(--blue-400); font-weight: 500; }
+    .mockup-grid { flex: 1; padding: 0; display: flex; flex-direction: column; }
+    .mockup-grid-header {
+      display: grid; grid-template-columns: 44px 1fr 80px 70px 70px 80px;
+      padding: 6px 12px; background: rgba(255,255,255,0.03);
+      font-size: 9px; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .mockup-grid-row {
+      display: grid; grid-template-columns: 44px 1fr 80px 70px 70px 80px;
+      padding: 5px 12px; font-size: 10px; align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      transition: background 0.15s;
+    }
+    .mockup-grid-row:nth-child(2) { background: rgba(59,130,246,0.08); }
+    .mockup-grid-row .img-placeholder {
+      width: 32px; height: 32px; border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+    }
+    .mockup-grid-row .title { color: var(--gray-200); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mockup-grid-row .price { color: var(--green-400); font-weight: 600; }
+    .mockup-grid-row .shipping { color: var(--gray-400); }
+    .mockup-grid-row .condition { color: var(--gray-400); }
+    .mockup-grid-row .time { color: var(--amber-400); font-size: 9px; }
+    .mockup-bottom {
+      height: 80px; border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .mockup-bottom-header { font-size: 9px; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+    .mockup-monitor-row {
+      display: flex; align-items: center; gap: 8px; font-size: 10px;
+    }
+    .monitor-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-400); }
+    .monitor-dot.amber { background: var(--amber-400); }
+
+    /* ---- Social proof ---- */
+    .social-proof {
+      padding: 48px 0;
+      text-align: center;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .social-proof p { font-size: 14px; color: var(--gray-400); margin-bottom: 24px; }
+    .proof-stats {
+      display: flex; justify-content: center; gap: 48px; flex-wrap: wrap;
+    }
+    .proof-stat { text-align: center; }
+    .proof-stat .number { font-size: 28px; font-weight: 800; color: var(--gray-900); }
+    .proof-stat .label { font-size: 13px; color: var(--gray-500); margin-top: 4px; }
+
+    /* ---- Section common ---- */
+    section { padding: 96px 0; }
+    .section-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--blue-600);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 40px); font-weight: 800;
+      color: var(--gray-900); line-height: 1.2; letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    .section-subtitle {
+      font-size: 17px; color: var(--gray-500); max-width: 600px; line-height: 1.7;
+    }
+    .section-header { text-align: center; margin-bottom: 64px; }
+    .section-header .section-subtitle { margin: 0 auto; }
+
+    /* ---- Features grid ---- */
+    .features { background: var(--gray-50); }
+    .features-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .feature-card {
+      background: #fff; border-radius: var(--radius-lg); padding: 32px;
+      border: 1px solid var(--gray-100);
+      transition: all 0.3s;
+    }
+    .feature-card:hover {
+      border-color: var(--blue-200); box-shadow: 0 8px 30px rgba(59,130,246,0.08);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px;
+    }
+    .feature-icon svg { width: 24px; height: 24px; }
+    .fi-blue { background: var(--blue-100); color: var(--blue-600); }
+    .fi-amber { background: #fef3c7; color: var(--amber-500); }
+    .fi-green { background: #dcfce7; color: var(--green-500); }
+    .fi-purple { background: #f3e8ff; color: var(--purple-500); }
+    .fi-red { background: #fee2e2; color: var(--red-400); }
+    .fi-gray { background: var(--gray-100); color: var(--gray-600); }
+    .feature-card h3 { font-size: 17px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: var(--gray-500); line-height: 1.6; }
+
+    /* ---- How it works ---- */
+    .how-it-works { background: #fff; }
+    .steps {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px;
+      position: relative;
+    }
+    .steps::before {
+      content: ''; position: absolute; top: 36px; left: 16%; right: 16%;
+      height: 2px; background: var(--gray-200);
+    }
+    .step { text-align: center; position: relative; }
+    .step-number {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--blue-600); color: #fff;
+      font-size: 28px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px; position: relative; z-index: 1;
+      box-shadow: 0 4px 16px rgba(37,99,235,0.25);
+    }
+    .step h3 { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+    .step p { font-size: 14px; color: var(--gray-500); max-width: 260px; margin: 0 auto; line-height: 1.6; }
+
+    /* ---- Pricing ---- */
+    .pricing { background: var(--gray-50); }
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
+      max-width: 800px; margin: 0 auto;
+    }
+    .pricing-card {
+      background: #fff; border-radius: var(--radius-xl); padding: 40px;
+      border: 1px solid var(--gray-200); position: relative;
+      transition: all 0.3s;
+    }
+    .pricing-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+    .pricing-card.featured {
+      border-color: var(--blue-600);
+      box-shadow: 0 4px 20px rgba(37,99,235,0.12);
+    }
+    .popular-badge {
+      position: absolute; top: -12px; right: 24px;
+      padding: 4px 14px; border-radius: 100px;
+      background: var(--blue-600); color: #fff;
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pricing-card .plan-name { font-size: 18px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+    .pricing-card .plan-desc { font-size: 14px; color: var(--gray-500); margin-bottom: 24px; }
+    .pricing-card .price { font-size: 48px; font-weight: 800; color: var(--gray-900); line-height: 1; }
+    .pricing-card .price span { font-size: 16px; font-weight: 500; color: var(--gray-400); }
+    .pricing-card .price-note { font-size: 13px; color: var(--gray-400); margin-top: 4px; margin-bottom: 24px; }
+    .pricing-features { list-style: none; margin-bottom: 32px; }
+    .pricing-features li {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 0; font-size: 14px; color: var(--gray-600);
+    }
+    .pricing-features li svg { width: 18px; height: 18px; color: var(--green-500); flex-shrink: 0; margin-top: 1px; }
+    .pricing-features li.disabled { color: var(--gray-400); }
+    .pricing-features li.disabled svg { color: var(--gray-300); }
+    .btn-block { width: 100%; justify-content: center; }
+
+    /* ---- Keyboard shortcuts showcase ---- */
+    .shortcuts { background: #fff; }
+    .shortcuts-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+    .shortcuts-text .section-subtitle { margin-bottom: 32px; }
+    .shortcut-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .shortcut-item {
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px 16px; border-radius: var(--radius);
+      background: var(--gray-50); border: 1px solid var(--gray-100);
+    }
+    .key-combo { display: flex; gap: 4px; flex-shrink: 0; }
+    .kbd {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 28px; padding: 0 8px;
+      background: #fff; border: 1px solid var(--gray-200);
+      border-radius: 6px; font-size: 12px; font-weight: 600;
+      color: var(--gray-700); box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      font-family: inherit;
+    }
+    .shortcut-desc { font-size: 14px; color: var(--gray-600); }
+    .shortcuts-visual {
+      background: var(--gray-950); border-radius: var(--radius-xl);
+      padding: 32px; display: flex; flex-direction: column; gap: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .sv-row { display: flex; align-items: center; gap: 12px; }
+    .sv-key {
+      display: flex; align-items: center; justify-content: center;
+      min-width: 44px; height: 40px; padding: 0 12px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; color: var(--blue-400); font-size: 14px; font-weight: 700;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .sv-arrow { color: var(--gray-600); font-size: 16px; }
+    .sv-action { color: var(--gray-300); font-size: 14px; }
+
+    /* ---- Testimonials ---- */
+    .testimonials { background: var(--gray-50); }
+    .testimonials-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+    }
+    .testimonial-card {
+      background: #fff; border-radius: var(--radius-lg); padding: 28px;
+      border: 1px solid var(--gray-100);
+    }
+    .testimonial-stars { display: flex; gap: 2px; margin-bottom: 16px; }
+    .testimonial-stars svg { width: 16px; height: 16px; color: var(--amber-400); fill: var(--amber-400); }
+    .testimonial-text { font-size: 14px; color: var(--gray-600); line-height: 1.7; margin-bottom: 20px; }
+    .testimonial-author { display: flex; align-items: center; gap: 12px; }
+    .testimonial-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--blue-100); color: var(--blue-600);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px;
+    }
+    .testimonial-name { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+    .testimonial-role { font-size: 12px; color: var(--gray-400); }
+
+    /* ---- FAQ ---- */
+    .faq { background: #fff; }
+    .faq-grid { max-width: 700px; margin: 0 auto; }
+    .faq-item {
+      border-bottom: 1px solid var(--gray-100); overflow: hidden;
+    }
+    .faq-question {
+      width: 100%; background: none; border: none; cursor: pointer;
+      padding: 20px 0; display: flex; align-items: center; justify-content: space-between;
+      font-size: 16px; font-weight: 600; color: var(--gray-900); text-align: left;
+      font-family: inherit;
+    }
+    .faq-question svg { width: 20px; height: 20px; color: var(--gray-400); transition: transform 0.3s; flex-shrink: 0; margin-left: 16px; }
+    .faq-item.open .faq-question svg { transform: rotate(45deg); }
+    .faq-answer {
+      max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;
+    }
+    .faq-item.open .faq-answer { max-height: 200px; padding-bottom: 20px; }
+    .faq-answer p { font-size: 14px; color: var(--gray-500); line-height: 1.7; }
+
+    /* ---- CTA ---- */
+    .cta-section {
+      padding: 96px 0;
+      background: linear-gradient(135deg, var(--gray-950), var(--blue-700));
+      text-align: center; color: #fff;
+    }
+    .cta-section h2 {
+      font-size: clamp(28px, 4vw, 40px); font-weight: 800;
+      margin-bottom: 16px; line-height: 1.2;
+    }
+    .cta-section p { font-size: 17px; color: rgba(255,255,255,0.7); margin-bottom: 40px; max-width: 500px; margin-left: auto; margin-right: auto; }
+    .btn-white {
+      background: #fff; color: var(--blue-700);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    .btn-white:hover { background: var(--gray-50); transform: translateY(-1px); }
+
+    /* ---- Footer ---- */
+    footer {
+      padding: 48px 0 32px;
+      background: var(--gray-950); color: var(--gray-400); font-size: 13px;
+    }
+    .footer-inner {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 16px; font-weight: 700; color: #fff; text-decoration: none;
+    }
+    .footer-logo svg { color: var(--blue-400); }
+    .footer-links { display: flex; gap: 24px; list-style: none; }
+    .footer-links a { color: var(--gray-400); text-decoration: none; font-size: 13px; }
+    .footer-links a:hover { color: #fff; }
+
+    /* ---- Animations ---- */
+    .fade-up {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .fade-up-delay-1 { transition-delay: 0.1s; }
+    .fade-up-delay-2 { transition-delay: 0.2s; }
+    .fade-up-delay-3 { transition-delay: 0.3s; }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 900px) {
+      .features-grid, .testimonials-grid { grid-template-columns: 1fr 1fr; }
+      .steps { grid-template-columns: 1fr; gap: 32px; }
+      .steps::before { display: none; }
+      .shortcuts-layout { grid-template-columns: 1fr; }
+      .shortcuts-visual { order: -1; }
+      .pricing-grid { grid-template-columns: 1fr; max-width: 420px; }
+    }
+    @media (max-width: 640px) {
+      .features-grid, .testimonials-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .mobile-toggle { display: block; }
+      .nav-links.open {
+        display: flex; flex-direction: column;
+        position: absolute; top: 64px; left: 0; right: 0;
+        background: #fff; padding: 16px 24px; gap: 16px;
+        border-bottom: 1px solid var(--gray-100);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      }
+      .hero { padding: 120px 0 60px; }
+      section { padding: 64px 0; }
+      .proof-stats { gap: 32px; }
+      .mockup-sidebar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        eBay-GoGo
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#download" class="nav-cta">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </a></li>
+      </ul>
+      <button class="mobile-toggle" onclick="document.getElementById('navLinks').classList.toggle('open')" aria-label="Toggle menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Now with real-time desktop alerts
+      </div>
+      <h1>Hunt eBay Deals at <span class="text-gradient">Lightning Speed</span></h1>
+      <p>Monitor up to 50 eBay searches simultaneously. Get instant notifications when new listings match your criteria. Triage deals in seconds with keyboard shortcuts.</p>
+      <div class="hero-actions">
+        <a href="#download" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Free
+        </a>
+        <a href="#features" class="btn btn-secondary">See How It Works</a>
+      </div>
+
+      <!-- App mockup -->
+      <div class="hero-visual fade-up">
+        <div class="hero-screenshot">
+          <div class="app-mockup">
+            <div class="mockup-topbar">
+              <div class="mockup-dots"><span></span><span></span><span></span></div>
+              <div class="mockup-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                eBay-GoGo
+              </div>
+              <div style="flex:1"></div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <span style="font-size:10px;color:#4ade80;background:rgba(74,222,128,0.1);padding:2px 8px;border-radius:4px;">Trial &mdash; 5 days left</span>
+              </div>
+            </div>
+            <div class="mockup-tabs">
+              <div class="mockup-tab active">Search</div>
+              <div class="mockup-tab">Monitors</div>
+              <div class="mockup-tab">History</div>
+              <div class="mockup-tab">Settings</div>
+            </div>
+            <div class="mockup-body">
+              <div class="mockup-sidebar">
+                <div class="mockup-filter">Price min <span class="mockup-filter-val">$5</span></div>
+                <div class="mockup-filter">Price max <span class="mockup-filter-val">$150</span></div>
+                <div class="mockup-filter">Condition <span class="mockup-filter-val">Used</span></div>
+                <div class="mockup-filter">Seller FB <span class="mockup-filter-val">&ge; 98%</span></div>
+                <div class="mockup-filter">Shipping <span class="mockup-filter-val">Free</span></div>
+                <div class="mockup-filter">US Only <span class="mockup-filter-val">Yes</span></div>
+              </div>
+              <div class="mockup-grid">
+                <div class="mockup-grid-header">
+                  <span></span><span>Title</span><span>Price</span><span>Ship</span><span>Cond.</span><span>Posted</span>
+                </div>
+                <div class="mockup-grid-row">
+                  <div class="img-placeholder"></div>
+                  <span class="title">Sony WH-1000XM4 Wireless Headphones Black</span>
+                  <span class="price">$89.99</span>
+                  <span class="shipping">Free</span>
+                  <span class="condition">Used</span>
+                  <span class="time">2m ago</span>
+                </div>
+                <div class="mockup-grid-row">
+                  <div class="img-placeholder"></div>
+                  <span class="title">Nintendo Switch OLED Console White 64GB</span>
+                  <span class="price">$219.00</span>
+                  <span class="shipping">$8.50</span>
+                  <span class="condition">Open Box</span>
+                  <span class="time">5m ago</span>
+                </div>
+                <div class="mockup-grid-row">
+                  <div class="img-placeholder"></div>
+                  <span class="title">Dyson V11 Cordless Vacuum Cleaner</span>
+                  <span class="price">$175.00</span>
+                  <span class="shipping">Free</span>
+                  <span class="condition">Refurb</span>
+                  <span class="time">8m ago</span>
+                </div>
+                <div class="mockup-grid-row">
+                  <div class="img-placeholder"></div>
+                  <span class="title">Apple AirPods Pro 2nd Gen MagSafe</span>
+                  <span class="price">$142.50</span>
+                  <span class="shipping">Free</span>
+                  <span class="condition">New</span>
+                  <span class="time">12m ago</span>
+                </div>
+                <div class="mockup-grid-row">
+                  <div class="img-placeholder"></div>
+                  <span class="title">Canon EOS R50 Mirrorless Camera Body</span>
+                  <span class="price">$429.00</span>
+                  <span class="shipping">$12.00</span>
+                  <span class="condition">Used</span>
+                  <span class="time">15m ago</span>
+                </div>
+              </div>
+            </div>
+            <div class="mockup-bottom">
+              <div class="mockup-bottom-header">Active Monitors</div>
+              <div class="mockup-monitor-row"><span class="monitor-dot"></span><span style="color:#9ca3af">vintage watches</span><span style="color:#4b5563;margin-left:auto">every 30s</span></div>
+              <div class="mockup-monitor-row"><span class="monitor-dot amber"></span><span style="color:#9ca3af">thinkpad x1 carbon</span><span style="color:#4b5563;margin-left:auto">every 60s</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Social proof -->
+  <div class="social-proof">
+    <div class="container">
+      <p>Trusted by deal hunters worldwide</p>
+      <div class="proof-stats">
+        <div class="proof-stat"><div class="number">6</div><div class="label">eBay Sites Supported</div></div>
+        <div class="proof-stat"><div class="number">10s</div><div class="label">Fastest Poll Interval</div></div>
+        <div class="proof-stat"><div class="number">50</div><div class="label">Simultaneous Monitors</div></div>
+        <div class="proof-stat"><div class="number">9+</div><div class="label">Keyboard Shortcuts</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Everything You Need to Win Deals</h2>
+        <p class="section-subtitle">Powerful tools built for eBay power users, resellers, collectors, and deal hunters.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card fade-up">
+          <div class="feature-icon fi-blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <h3>Real-Time Monitors</h3>
+          <p>Create up to 50 recurring searches that poll eBay as fast as every 10 seconds. Never miss a new listing again.</p>
+        </div>
+        <div class="feature-card fade-up fade-up-delay-1">
+          <div class="feature-icon fi-amber">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </div>
+          <h3>Instant Alerts</h3>
+          <p>Desktop notifications and sound alerts the moment new matching listings appear. Configure quiet hours for peace of mind.</p>
+        </div>
+        <div class="feature-card fade-up fade-up-delay-2">
+          <div class="feature-icon fi-green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3>Keyboard-First Workflow</h3>
+          <p>Buy, make offers, copy links, ignore sellers, and exclude keywords &mdash; all without touching the mouse.</p>
+        </div>
+        <div class="feature-card fade-up">
+          <div class="feature-icon fi-purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </div>
+          <h3>Advanced Filters</h3>
+          <p>Price range, condition, shipping, seller feedback minimum, US-only, search in description, and exclude keywords.</p>
+        </div>
+        <div class="feature-card fade-up fade-up-delay-1">
+          <div class="feature-icon fi-red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </div>
+          <h3>Custom Views</h3>
+          <p>Save filtered views with specific column layouts. Switch between global, group, or per-monitor views instantly.</p>
+        </div>
+        <div class="feature-card fade-up fade-up-delay-2">
+          <div class="feature-icon fi-gray">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <h3>History &amp; Export</h3>
+          <p>Browse every listing ever found. Filter by date range or monitor, then export to CSV for analytics or tax records.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-label">How It Works</div>
+        <h2 class="section-title">Up and Running in Minutes</h2>
+        <p class="section-subtitle">Three steps to never missing an eBay deal again.</p>
+      </div>
+      <div class="steps">
+        <div class="step fade-up">
+          <div class="step-number">1</div>
+          <h3>Download &amp; Launch</h3>
+          <p>Install eBay-GoGo on Windows, macOS, or Linux. Your 7-day free trial starts instantly &mdash; no credit card needed.</p>
+        </div>
+        <div class="step fade-up fade-up-delay-1">
+          <div class="step-number">2</div>
+          <h3>Create Monitors</h3>
+          <p>Set up searches with your filters &mdash; price, condition, keywords. Choose how often to poll (down to every 10 seconds on Pro).</p>
+        </div>
+        <div class="step fade-up fade-up-delay-2">
+          <div class="step-number">3</div>
+          <h3>Catch Every Deal</h3>
+          <p>Get instant desktop alerts when new listings match. Buy, offer, or bookmark with a single keystroke. Never miss a deal.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Keyboard shortcuts -->
+  <section class="shortcuts">
+    <div class="container">
+      <div class="shortcuts-layout">
+        <div class="shortcuts-text">
+          <div class="section-label">Power User Mode</div>
+          <h2 class="section-title">Built for Speed</h2>
+          <p class="section-subtitle">Every action has a keyboard shortcut. Triage dozens of listings per minute without ever reaching for the mouse.</p>
+          <ul class="shortcut-list">
+            <li class="shortcut-item">
+              <div class="key-combo"><span class="kbd">B</span></div>
+              <span class="shortcut-desc">Buy It Now &mdash; open listing to purchase</span>
+            </li>
+            <li class="shortcut-item">
+              <div class="key-combo"><span class="kbd">O</span></div>
+              <span class="shortcut-desc">Make an offer on the selected item</span>
+            </li>
+            <li class="shortcut-item">
+              <div class="key-combo"><span class="kbd">C</span></div>
+              <span class="shortcut-desc">Copy listing link to clipboard</span>
+            </li>
+            <li class="shortcut-item">
+              <div class="key-combo"><span class="kbd">I</span></div>
+              <span class="shortcut-desc">Ignore seller &mdash; hide their listings</span>
+            </li>
+            <li class="shortcut-item">
+              <div class="key-combo"><span class="kbd">E</span></div>
+              <span class="shortcut-desc">Exclude keyword from current results</span>
+            </li>
+          </ul>
+        </div>
+        <div class="shortcuts-visual fade-up">
+          <div class="sv-row"><div class="sv-key">B</div><div class="sv-arrow">&rarr;</div><div class="sv-action">Opens Buy It Now page instantly</div></div>
+          <div class="sv-row"><div class="sv-key">O</div><div class="sv-arrow">&rarr;</div><div class="sv-action">Send an offer in one step</div></div>
+          <div class="sv-row"><div class="sv-key">C</div><div class="sv-arrow">&rarr;</div><div class="sv-action">Link copied to clipboard</div></div>
+          <div class="sv-row"><div class="sv-key">I</div><div class="sv-arrow">&rarr;</div><div class="sv-action">Seller hidden from all results</div></div>
+          <div class="sv-row"><div class="sv-key">E</div><div class="sv-arrow">&rarr;</div><div class="sv-action">Keyword excluded from search</div></div>
+          <div class="sv-row"><div class="sv-key">Ctrl+L</div><div class="sv-arrow">&rarr;</div><div class="sv-action">Clear all results instantly</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pricing" id="pricing">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-label">Pricing</div>
+        <h2 class="section-title">Simple, Transparent Pricing</h2>
+        <p class="section-subtitle">Start with a free 7-day trial. Upgrade when you're ready.</p>
+      </div>
+      <div class="pricing-grid">
+        <div class="pricing-card fade-up">
+          <div class="plan-name">Starter</div>
+          <div class="plan-desc">For casual deal hunters getting started.</div>
+          <div class="price">Free<span></span></div>
+          <div class="price-note">7-day trial, no credit card</div>
+          <ul class="pricing-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Up to 5 simultaneous monitors
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              60-second minimum poll interval
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Search across 6 eBay sites
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              All keyboard shortcuts
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              History &amp; CSV export
+            </li>
+            <li class="disabled">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Custom views
+            </li>
+            <li class="disabled">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Sound &amp; desktop alerts
+            </li>
+          </ul>
+          <a href="#download" class="btn btn-secondary btn-block">Start Free Trial</a>
+        </div>
+        <div class="pricing-card featured fade-up fade-up-delay-1">
+          <div class="popular-badge">Most Popular</div>
+          <div class="plan-name">Pro</div>
+          <div class="plan-desc">For power users and resellers.</div>
+          <div class="price">$12<span>/mo</span></div>
+          <div class="price-note">Billed monthly. Cancel anytime.</div>
+          <ul class="pricing-features">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Up to <strong>50</strong> simultaneous monitors
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>10-second</strong> minimum poll interval
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Search across 6 eBay sites
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              All keyboard shortcuts
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              History &amp; CSV export
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Custom views &amp; saved layouts
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Sound &amp; desktop alerts
+            </li>
+          </ul>
+          <a href="#download" class="btn btn-primary btn-block">Get Pro</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section class="testimonials">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-label">Testimonials</div>
+        <h2 class="section-title">Loved by Deal Hunters</h2>
+        <p class="section-subtitle">See what eBay power users are saying about eBay-GoGo.</p>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card fade-up">
+          <div class="testimonial-stars">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="testimonial-text">"I flipped $3,000 worth of vintage watches last month. eBay-GoGo alerts me within seconds of new listings. Game changer for resellers."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar">MR</div>
+            <div><div class="testimonial-name">Mike R.</div><div class="testimonial-role">Vintage Watch Reseller</div></div>
+          </div>
+        </div>
+        <div class="testimonial-card fade-up fade-up-delay-1">
+          <div class="testimonial-stars">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="testimonial-text">"The keyboard shortcuts alone are worth it. I can triage 50+ listings in a few minutes. B to buy, C to copy, I to ignore &mdash; it's so fast."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar">SL</div>
+            <div><div class="testimonial-name">Sarah L.</div><div class="testimonial-role">Electronics Flipper</div></div>
+          </div>
+        </div>
+        <div class="testimonial-card fade-up fade-up-delay-2">
+          <div class="testimonial-stars">
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="testimonial-text">"As a Pokémon card collector, timing is everything. I run 15 monitors for specific sets. Got a $200 card for $45 because I saw it first."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar">JT</div>
+            <div><div class="testimonial-name">James T.</div><div class="testimonial-role">Trading Card Collector</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq" id="faq">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-label">FAQ</div>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+      </div>
+      <div class="faq-grid">
+        <div class="faq-item">
+          <button class="faq-question">
+            What platforms does eBay-GoGo run on?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <div class="faq-answer"><p>eBay-GoGo is a desktop app available for Windows, macOS, and Linux. It's built on Electron for a native-like experience on every platform.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            Which eBay sites are supported?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <div class="faq-answer"><p>We support 6 eBay sites: US, UK, Germany, Australia, Canada, and France. You can monitor across multiple sites simultaneously.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            How does the free trial work?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <div class="faq-answer"><p>Your 7-day trial starts the moment you launch the app. No credit card required. You get Starter plan features (5 monitors, 60s intervals) for the full trial period.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            Is my data stored locally?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <div class="faq-answer"><p>Yes. All your monitors, search history, and settings are stored locally on your machine. Your data never leaves your computer except for eBay API calls and license validation.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            Can I use it without an internet connection?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <div class="faq-answer"><p>eBay-GoGo includes a mock mode that works fully offline with realistic test data. Great for exploring the app before connecting to the live eBay API. Active licenses also have a 72-hour offline grace period.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">
+            How do I cancel my subscription?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <div class="faq-answer"><p>You can deactivate your license at any time from Settings within the app. There are no cancellation fees or long-term contracts.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section" id="download">
+    <div class="container">
+      <h2>Ready to Catch Every Deal?</h2>
+      <p>Download eBay-GoGo and start your free 7-day trial. No credit card required.</p>
+      <div class="hero-actions" style="justify-content:center;">
+        <a href="#" class="btn btn-white">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Windows
+        </a>
+        <a href="#" class="btn btn-white" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.3);">
+          Download for macOS
+        </a>
+      </div>
+      <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-top:16px;">Also available for Linux &bull; v1.0.0</p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <a href="#" class="footer-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          eBay-GoGo
+        </a>
+        <ul class="footer-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#">Privacy</a></li>
+          <li><a href="#">Terms</a></li>
+        </ul>
+        <span>&copy; 2026 eBay-GoGo. All rights reserved.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll-based nav shadow
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 10);
+    });
+
+    // Scroll-triggered fade-up animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+    // FAQ accordion
+    document.querySelectorAll('.faq-question').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = btn.parentElement;
+        const wasOpen = item.classList.contains('open');
+        document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+        if (!wasOpen) item.classList.add('open');
+      });
+    });
+
+    // Smooth scroll for nav links
+    document.querySelectorAll('a[href^="#"]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document.getElementById('navLinks').classList.remove('open');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
