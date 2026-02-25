@@ -382,6 +382,9 @@ export async function searchListings(params: SearchParams): Promise<Omit<Listing
 }
 
 export async function testConnection(): Promise<{ success: boolean; message: string }> {
+  // Debug: log credential state at test time
+  addLog('info', `[DEBUG] testConnection called — credentials null? ${!credentials}, appId="${credentials?.appId?.slice(0, 8) || ''}...", oauthToken length=${credentials?.oauthToken?.length || 0}, isMockMode=${isMockMode()}`)
+
   if (isMockMode()) {
     return { success: true, message: 'Running in MOCK MODE - no credentials configured' }
   }

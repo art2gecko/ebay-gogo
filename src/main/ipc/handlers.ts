@@ -80,6 +80,13 @@ export function registerIpcHandlers(): void {
   handle('settings:get', () => getSettings())
 
   handle('settings:save', (_e, partial) => {
+    if (partial.credentials) {
+      const hasAppId = !!partial.credentials.appId
+      const hasCertId = !!partial.credentials.certId
+      const hasOAuthToken = !!partial.credentials.oauthToken
+      const tokenLen = partial.credentials.oauthToken?.length || 0
+      addLog('info', `Saving credentials: appId=${hasAppId}, certId=${hasCertId}, oauthToken=${hasOAuthToken} (${tokenLen} chars), env=${partial.credentials.environment}`)
+    }
     const settings = saveSettings(partial)
     if (partial.credentials) {
       setCredentials(partial.credentials)
