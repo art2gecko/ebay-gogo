@@ -6,18 +6,28 @@ import { ImagesPane } from './ImagesPane'
 import { EmptyState } from './EmptyState'
 import { MonitorsBottomTable } from '../monitors/MonitorsBottomTable'
 import { MonitorModal } from '../monitors/MonitorModal'
+import { CreateViewModal } from '../views/CreateViewModal'
+import { ManageViewsModal } from '../views/ManageViewsModal'
 import { useSearchStore } from '@/stores/searchStore'
 
 interface SearchLayoutProps {
   showSaveMonitor?: boolean
   onCloseSaveMonitor?: () => void
+  showCreateView?: boolean
+  onCloseCreateView?: () => void
+  showManageViews?: boolean
+  onCloseManageViews?: () => void
 }
 
-export function SearchLayout({ showSaveMonitor, onCloseSaveMonitor }: SearchLayoutProps): React.JSX.Element {
+export function SearchLayout({
+  showSaveMonitor, onCloseSaveMonitor,
+  showCreateView, onCloseCreateView,
+  showManageViews, onCloseManageViews
+}: SearchLayoutProps): React.JSX.Element {
   const { results, loading } = useSearchStore()
   const [showMonitorModal, setShowMonitorModal] = useState(false)
+  const [showDismissed, setShowDismissed] = useState(false)
 
-  // Handle external trigger (from TopBar's Save Monitor button)
   const isModalOpen = showMonitorModal || (showSaveMonitor ?? false)
   const closeModal = (): void => {
     setShowMonitorModal(false)
@@ -78,7 +88,7 @@ export function SearchLayout({ showSaveMonitor, onCloseSaveMonitor }: SearchLayo
           {/* Center: Results grid or empty state */}
           <div className="flex-1 flex flex-col min-w-0">
             {hasResults ? (
-              <ResultsGrid />
+              <ResultsGrid showDismissed={showDismissed} onToggleShowDismissed={() => setShowDismissed(!showDismissed)} />
             ) : (
               <EmptyState onCreateMonitor={() => setShowMonitorModal(true)} />
             )}
@@ -116,6 +126,14 @@ export function SearchLayout({ showSaveMonitor, onCloseSaveMonitor }: SearchLayo
 
       {/* Monitor modal */}
       <MonitorModal open={isModalOpen} onClose={closeModal} />
+
+      {/* View modals */}
+      {showCreateView && onCloseCreateView && (
+        <CreateViewModal open={showCreateView} onClose={onCloseCreateView} />
+      )}
+      {showManageViews && onCloseManageViews && (
+        <ManageViewsModal open={showManageViews} onClose={onCloseManageViews} />
+      )}
     </div>
   )
 }

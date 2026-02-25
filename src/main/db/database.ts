@@ -6,7 +6,8 @@ import path from 'path'
 import { runMigrations } from './migrations'
 import type {
   Monitor, MonitorCreateInput, MonitorUpdateInput,
-  Listing, LogEntry
+  Listing, LogEntry, EbayCategory, CategorySearchResult, RecentCategory,
+  View, ViewCreateInput, ViewUpdateInput
 } from '@shared/types'
 
 // ============================================================
@@ -91,7 +92,8 @@ export class DatabaseWrapper {
     return undefined
   }
 
-  transaction<F extends (...args: unknown[]) => unknown>(fn: F): (...args: Parameters<F>) => ReturnType<F> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transaction<F extends (...args: any[]) => any>(fn: F): (...args: Parameters<F>) => ReturnType<F> {
     return ((...args: Parameters<F>) => {
       this.sqlDb.run('BEGIN TRANSACTION')
       try {
@@ -192,6 +194,9 @@ function rowToMonitor(row: Record<string, unknown>): Monitor {
     locatedIn: row.locatedIn as string,
     shipsTo: row.shipsTo as string,
     categoryId: row.categoryId as string,
+    categoryPath: (row.categoryPath as string) || '',
+    includeSubcategories: !!(row.includeSubcategories as number),
+    viewId: (row.viewId as string) || '',
     status: row.status as Monitor['status'],
     lastCheckAt: row.lastCheckAt as string | null,
     createdAt: row.createdAt as string,
@@ -217,8 +222,8 @@ export function createMonitor(input: MonitorCreateInput): Monitor {
       condition, format, freeShippingOnly, excludeKeywords_json,
       sellerMinFeedback, usOnly, totalPriceMode, allowSellers_json,
       denySellers_json, intervalSec, viewType, site, locatedIn, shipsTo,
-      categoryId, status, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Idle', ?, ?)
+      categoryId, categoryPath, includeSubcategories, viewId, status, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Idle', ?, ?)
   `)
   const result = stmt.run(
     input.enabled ? 1 : 0,
@@ -242,6 +247,9 @@ export function createMonitor(input: MonitorCreateInput): Monitor {
     input.locatedIn,
     input.shipsTo,
     input.categoryId,
+    input.categoryPath || '',
+    input.includeSubcategories ? 1 : 0,
+    input.viewId || '',
     now,
     now
   )
@@ -262,7 +270,8 @@ export function updateMonitor(input: MonitorUpdateInput): Monitor {
       freeShippingOnly = ?, excludeKeywords_json = ?, sellerMinFeedback = ?,
       usOnly = ?, totalPriceMode = ?, allowSellers_json = ?,
       denySellers_json = ?, intervalSec = ?, viewType = ?, site = ?,
-      locatedIn = ?, shipsTo = ?, categoryId = ?, updatedAt = ?
+      locatedIn = ?, shipsTo = ?, categoryId = ?, categoryPath = ?,
+      includeSubcategories = ?, viewId = ?, updatedAt = ?
     WHERE id = ?
   `).run(
     merged.enabled ? 1 : 0,
@@ -286,6 +295,9 @@ export function updateMonitor(input: MonitorUpdateInput): Monitor {
     merged.locatedIn,
     merged.shipsTo,
     merged.categoryId,
+    merged.categoryPath || '',
+    merged.includeSubcategories ? 1 : 0,
+    merged.viewId || '',
     now,
     input.id
   )
@@ -327,6 +339,7 @@ function rowToListing(row: Record<string, unknown>): Listing {
     images: JSON.parse(row.images_json as string),
     itemSpecifics: JSON.parse(row.itemSpecifics_json as string),
     rawJson: row.raw_json as string,
+    dismissedAt: (row.dismissedAt as string) || null,
     createdAt: row.createdAt as string
   }
 }
@@ -398,10 +411,14 @@ export function getListings(params: {
   monitorId?: number
   dateFrom?: string
   dateTo?: string
+  includeDismissed?: boolean
 }): Listing[] {
   let sql = 'SELECT * FROM listings WHERE 1=1'
   const args: unknown[] = []
 
+  if (!params.includeDismissed) {
+    sql += ' AND dismissedAt IS NULL'
+  }
   if (params.monitorId) {
     sql += ' AND monitorId = ?'
     args.push(params.monitorId)
@@ -608,4 +625,294 @@ export function addExcludeKeyword(keyword: string, monitorId?: number): boolean 
     }
   }
   return true
+}
+
+// ============================================================
+// Category Operations
+// ============================================================
+
+export function getCategoryCount(): number {
+  const row = getDb().prepare('SELECT COUNT(*) as count FROM categories').get() as { count: number }
+  return row.count
+}
+
+export function upsertCategories(categories: EbayCategory[]): void {
+  const insert = getDb().transaction((cats: EbayCategory[]) => {
+    for (const cat of cats) {
+      getDb().prepare(`
+        INSERT OR REPLACE INTO categories (categoryId, parentId, name, path, isLeaf, marketplace)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(cat.categoryId, cat.parentId, cat.name, cat.path, cat.isLeaf ? 1 : 0, cat.marketplace)
+    }
+  })
+  insert(categories)
+}
+
+export function searchCategories(query: string, limit: number = 50): CategorySearchResult[] {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  // If query is a number, search by categoryId first
+  const isNumeric = /^\d+$/.test(trimmed)
+
+  if (isNumeric) {
+    const exact = getDb().prepare(
+      'SELECT categoryId, name, path, isLeaf FROM categories WHERE categoryId = ?'
+    ).get(trimmed) as Record<string, unknown> | undefined
+
+    if (exact) {
+      return [{
+        categoryId: exact.categoryId as string,
+        name: exact.name as string,
+        path: exact.path as string,
+        isLeaf: !!(exact.isLeaf as number)
+      }]
+    }
+  }
+
+  // Search by name: exact > prefix > contains
+  const lowerQuery = trimmed.toLowerCase()
+  const rows = getDb().prepare(`
+    SELECT categoryId, name, path, isLeaf,
+      CASE
+        WHEN LOWER(name) = ? THEN 0
+        WHEN LOWER(name) LIKE ? THEN 1
+        WHEN LOWER(name) LIKE ? THEN 2
+        WHEN LOWER(path) LIKE ? THEN 3
+        ELSE 4
+      END as rank
+    FROM categories
+    WHERE LOWER(name) LIKE ? OR LOWER(path) LIKE ? OR categoryId LIKE ?
+    ORDER BY rank ASC, LENGTH(name) ASC
+    LIMIT ?
+  `).all(
+    lowerQuery,
+    lowerQuery + '%',
+    '%' + lowerQuery + '%',
+    '%' + lowerQuery + '%',
+    '%' + lowerQuery + '%',
+    '%' + lowerQuery + '%',
+    trimmed + '%',
+    limit
+  ) as Record<string, unknown>[]
+
+  return rows.map(r => ({
+    categoryId: r.categoryId as string,
+    name: r.name as string,
+    path: r.path as string,
+    isLeaf: !!(r.isLeaf as number)
+  }))
+}
+
+export function getRecentCategories(limit: number = 10): RecentCategory[] {
+  const rows = getDb().prepare(`
+    SELECT rc.id, rc.categoryId, c.name, c.path, rc.usedAt
+    FROM recent_categories rc
+    LEFT JOIN categories c ON rc.categoryId = c.categoryId
+    ORDER BY rc.usedAt DESC
+    LIMIT ?
+  `).all(limit) as Record<string, unknown>[]
+
+  return rows.map(r => ({
+    id: r.id as number,
+    categoryId: r.categoryId as string,
+    name: (r.name as string) || 'Unknown',
+    path: (r.path as string) || '',
+    usedAt: r.usedAt as number
+  }))
+}
+
+export function trackCategoryUsage(categoryId: string): boolean {
+  // Remove old entry if exists, keep only last 10
+  getDb().prepare('DELETE FROM recent_categories WHERE categoryId = ?').run(categoryId)
+  getDb().prepare('INSERT INTO recent_categories (categoryId, usedAt) VALUES (?, ?)').run(categoryId, Date.now())
+  // Trim to 10
+  getDb().prepare(`
+    DELETE FROM recent_categories WHERE id NOT IN (
+      SELECT id FROM recent_categories ORDER BY usedAt DESC LIMIT 10
+    )
+  `).run()
+  return true
+}
+
+export function saveCategoryTree(treeId: string, marketplace: string, version: string, rawJson: string): void {
+  getDb().prepare(`
+    INSERT OR REPLACE INTO category_trees (treeId, marketplace, fetchedAt, version, rawJson)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(treeId, marketplace, Date.now(), version, rawJson)
+}
+
+// ============================================================
+// View Operations
+// ============================================================
+
+function rowToView(row: Record<string, unknown>): View {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    isDefault: !!(row.isDefault as number),
+    scope: (row.scope as string) as View['scope'],
+    filters: JSON.parse((row.filtersJson as string) || '{}'),
+    sort: row.sortJson ? JSON.parse(row.sortJson as string) : null,
+    columns: row.columnsJson ? JSON.parse(row.columnsJson as string) : null,
+    groupFilter: row.groupFilterJson ? JSON.parse(row.groupFilterJson as string) : null,
+    monitorIds: row.monitorIdsJson ? JSON.parse(row.monitorIdsJson as string) : null,
+    createdAt: row.createdAt as number,
+    updatedAt: row.updatedAt as number
+  }
+}
+
+export function listViews(): View[] {
+  const rows = getDb().prepare('SELECT * FROM views ORDER BY name').all() as Record<string, unknown>[]
+  return rows.map(rowToView)
+}
+
+export function getView(id: string): View | null {
+  const row = getDb().prepare('SELECT * FROM views WHERE id = ?').get(id) as Record<string, unknown> | undefined
+  return row ? rowToView(row) : null
+}
+
+export function createView(input: ViewCreateInput): View {
+  const now = Date.now()
+  getDb().prepare(`
+    INSERT INTO views (id, name, isDefault, scope, filtersJson, sortJson, columnsJson, groupFilterJson, monitorIdsJson, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.id,
+    input.name,
+    input.isDefault ? 1 : 0,
+    input.scope,
+    JSON.stringify(input.filters),
+    input.sort ? JSON.stringify(input.sort) : null,
+    input.columns ? JSON.stringify(input.columns) : null,
+    input.groupFilter ? JSON.stringify(input.groupFilter) : null,
+    input.monitorIds ? JSON.stringify(input.monitorIds) : null,
+    now,
+    now
+  )
+  return getView(input.id)!
+}
+
+export function updateView(input: ViewUpdateInput): View {
+  const existing = getView(input.id)
+  if (!existing) throw new Error(`View ${input.id} not found`)
+
+  const now = Date.now()
+  const merged = { ...existing, ...input }
+
+  getDb().prepare(`
+    UPDATE views SET
+      name = ?, isDefault = ?, scope = ?, filtersJson = ?,
+      sortJson = ?, columnsJson = ?, groupFilterJson = ?,
+      monitorIdsJson = ?, updatedAt = ?
+    WHERE id = ?
+  `).run(
+    merged.name,
+    merged.isDefault ? 1 : 0,
+    merged.scope,
+    JSON.stringify(merged.filters),
+    merged.sort ? JSON.stringify(merged.sort) : null,
+    merged.columns ? JSON.stringify(merged.columns) : null,
+    merged.groupFilter ? JSON.stringify(merged.groupFilter) : null,
+    merged.monitorIds ? JSON.stringify(merged.monitorIds) : null,
+    now,
+    input.id
+  )
+  return getView(input.id)!
+}
+
+export function deleteView(id: string): boolean {
+  const result = getDb().prepare('DELETE FROM views WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function setDefaultView(id: string): boolean {
+  getDb().prepare('UPDATE views SET isDefault = 0 WHERE isDefault = 1').run()
+  const result = getDb().prepare('UPDATE views SET isDefault = 1 WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+// ============================================================
+// Dismiss / Delete Operations
+// ============================================================
+
+export function dismissListings(itemIds: string[]): number {
+  const now = new Date().toISOString()
+  let count = 0
+  const dismiss = getDb().transaction((ids: string[]) => {
+    for (const itemId of ids) {
+      const result = getDb().prepare('UPDATE listings SET dismissedAt = ? WHERE itemId = ? AND dismissedAt IS NULL').run(now, itemId)
+      count += result.changes
+    }
+  })
+  dismiss(itemIds)
+  return count
+}
+
+export function dismissByView(monitorIds?: number[], groupNames?: string[]): number {
+  const now = new Date().toISOString()
+  if (monitorIds && monitorIds.length > 0) {
+    let count = 0
+    for (const mid of monitorIds) {
+      const result = getDb().prepare('UPDATE listings SET dismissedAt = ? WHERE monitorId = ? AND dismissedAt IS NULL').run(now, mid)
+      count += result.changes
+    }
+    return count
+  }
+  if (groupNames && groupNames.length > 0) {
+    const monitors = listMonitors().filter(m => groupNames.includes(m.group))
+    let count = 0
+    for (const m of monitors) {
+      const result = getDb().prepare('UPDATE listings SET dismissedAt = ? WHERE monitorId = ? AND dismissedAt IS NULL').run(now, m.id)
+      count += result.changes
+    }
+    return count
+  }
+  // Dismiss all
+  const result = getDb().prepare('UPDATE listings SET dismissedAt = ? WHERE dismissedAt IS NULL').run(now)
+  return result.changes
+}
+
+export function resetDismissed(monitorIds?: number[], groupNames?: string[]): number {
+  if (monitorIds && monitorIds.length > 0) {
+    let count = 0
+    for (const mid of monitorIds) {
+      const result = getDb().prepare('UPDATE listings SET dismissedAt = NULL WHERE monitorId = ? AND dismissedAt IS NOT NULL').run(mid)
+      count += result.changes
+    }
+    return count
+  }
+  if (groupNames && groupNames.length > 0) {
+    const monitors = listMonitors().filter(m => groupNames.includes(m.group))
+    let count = 0
+    for (const m of monitors) {
+      const result = getDb().prepare('UPDATE listings SET dismissedAt = NULL WHERE monitorId = ? AND dismissedAt IS NOT NULL').run(m.id)
+      count += result.changes
+    }
+    return count
+  }
+  // Reset all
+  const result = getDb().prepare('UPDATE listings SET dismissedAt = NULL WHERE dismissedAt IS NOT NULL').run()
+  return result.changes
+}
+
+export function deleteListingsByScope(scope: string, monitorId?: number, groupName?: string): number {
+  if (scope === 'monitor' && monitorId) {
+    const result = getDb().prepare('DELETE FROM listings WHERE monitorId = ?').run(monitorId)
+    return result.changes
+  }
+  if (scope === 'group' && groupName) {
+    const monitors = listMonitors().filter(m => m.group === groupName)
+    let count = 0
+    for (const m of monitors) {
+      const result = getDb().prepare('DELETE FROM listings WHERE monitorId = ?').run(m.id)
+      count += result.changes
+    }
+    return count
+  }
+  if (scope === 'all') {
+    const result = getDb().prepare('DELETE FROM listings').run()
+    return result.changes
+  }
+  return 0
 }

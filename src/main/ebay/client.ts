@@ -303,7 +303,8 @@ function parseBrowseResponse(data: BrowseSearchResponse): Omit<Listing, 'id' | '
         foundAt: new Date().toISOString(),
         images,
         itemSpecifics: {},
-        rawJson: JSON.stringify(item)
+        rawJson: JSON.stringify(item),
+        dismissedAt: null
       }
     })
   } catch (err) {

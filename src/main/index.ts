@@ -4,6 +4,7 @@ import { initDatabase } from './db/database'
 import { registerIpcHandlers } from './ipc/handlers'
 import { setCredentials } from './ebay/client'
 import { setMainWindow } from './engine/engine'
+import { ensureCategoriesLoaded } from './ebay/taxonomy'
 import { getCredentials } from './store'
 
 let mainWindow: BrowserWindow | null = null
@@ -58,6 +59,9 @@ app.whenReady().then(async () => {
   if (creds.appId || creds.oauthToken) {
     setCredentials(creds)
   }
+
+  // Load bundled categories if DB is empty
+  ensureCategoriesLoaded()
 
   // Register IPC handlers
   registerIpcHandlers()

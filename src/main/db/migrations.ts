@@ -83,6 +83,58 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       );
     `
   }
+  ,{
+    version: 2,
+    sql: `
+      ALTER TABLE monitors ADD COLUMN categoryPath TEXT NOT NULL DEFAULT '';
+      ALTER TABLE monitors ADD COLUMN includeSubcategories INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE monitors ADD COLUMN viewId TEXT NOT NULL DEFAULT '';
+
+      ALTER TABLE listings ADD COLUMN dismissedAt TEXT;
+      CREATE INDEX IF NOT EXISTS idx_listings_dismissedAt ON listings(dismissedAt);
+
+      CREATE TABLE IF NOT EXISTS category_trees (
+        treeId TEXT NOT NULL,
+        marketplace TEXT NOT NULL,
+        fetchedAt INTEGER NOT NULL,
+        version TEXT NOT NULL DEFAULT '',
+        rawJson TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (treeId, marketplace)
+      );
+
+      CREATE TABLE IF NOT EXISTS categories (
+        categoryId TEXT PRIMARY KEY,
+        parentId TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL,
+        path TEXT NOT NULL DEFAULT '',
+        isLeaf INTEGER NOT NULL DEFAULT 0,
+        marketplace TEXT NOT NULL DEFAULT 'EBAY_US'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name);
+      CREATE INDEX IF NOT EXISTS idx_categories_path ON categories(path);
+
+      CREATE TABLE IF NOT EXISTS recent_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId TEXT NOT NULL,
+        usedAt INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS views (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isDefault INTEGER NOT NULL DEFAULT 0,
+        scope TEXT NOT NULL DEFAULT 'global',
+        filtersJson TEXT NOT NULL DEFAULT '{}',
+        sortJson TEXT,
+        columnsJson TEXT,
+        groupFilterJson TEXT,
+        monitorIdsJson TEXT,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+    `
+  }
 ]
 
 export function runMigrations(db: DatabaseWrapper): void {

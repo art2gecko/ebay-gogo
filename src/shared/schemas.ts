@@ -23,6 +23,9 @@ export const MonitorSchema = z.object({
   locatedIn: z.string().default(''),
   shipsTo: z.string().default(''),
   categoryId: z.string().default(''),
+  categoryPath: z.string().default(''),
+  includeSubcategories: z.boolean().default(false),
+  viewId: z.string().default(''),
   status: z.enum(['OK', 'RateLimited', 'AuthError', 'Error', 'Idle']).default('Idle'),
   lastCheckAt: z.string().nullable().default(null),
   createdAt: z.string(),
@@ -60,6 +63,7 @@ export const ListingSchema = z.object({
   images: z.array(z.string()),
   itemSpecifics: z.record(z.string()),
   rawJson: z.string(),
+  dismissedAt: z.string().nullable().default(null),
   createdAt: z.string()
 })
 

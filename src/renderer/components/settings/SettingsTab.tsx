@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Save, TestTube, Shield, Bell, Keyboard, BarChart3 } from 'lucide-react'
+import { Save, TestTube, Shield, Bell, Keyboard, BarChart3, FolderTree, RefreshCw } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Select } from '../ui/select'
@@ -113,12 +113,38 @@ export function SettingsTab(): React.JSX.Element {
     }
   }, [handleSave])
 
+  const [categoryCount, setCategoryCount] = useState<number | null>(null)
+  const [refreshingCategories, setRefreshingCategories] = useState(false)
+  const [categoryMessage, setCategoryMessage] = useState('')
+
+  useEffect(() => {
+    invoke('categories:count').then(setCategoryCount).catch(() => {})
+  }, [])
+
+  const handleRefreshCategories = useCallback(async () => {
+    setRefreshingCategories(true)
+    setCategoryMessage('')
+    try {
+      const result = await invoke('categories:refresh')
+      setCategoryMessage(result.message)
+      if (result.success) {
+        setCategoryCount(result.count)
+      }
+    } catch {
+      setCategoryMessage('Failed to refresh categories')
+    } finally {
+      setRefreshingCategories(false)
+    }
+  }, [])
+
   const HOTKEYS = [
     { key: 'B', action: 'Buy / Open on eBay' },
     { key: 'O', action: 'Make Offer' },
     { key: 'C', action: 'Copy Link' },
     { key: 'I', action: 'Ignore Seller' },
     { key: 'E', action: 'Add Exclude Keyword' },
+    { key: 'Ctrl+L', action: 'Clear from Screen' },
+    { key: 'Ctrl+Shift+L', action: 'Reset Dismissed' },
     { key: 'Enter', action: 'Open Details' },
     { key: 'Arrow Up/Down', action: 'Navigate Results' }
   ]
@@ -255,6 +281,30 @@ export function SettingsTab(): React.JSX.Element {
               className="h-7 text-xs w-24"
             />
           </div>
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <FolderTree size={16} className="text-primary" />
+          <h3 className="text-sm font-semibold">eBay Categories</h3>
+          {categoryCount !== null && (
+            <Badge variant="secondary">{categoryCount.toLocaleString()} categories</Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Categories are used for the typeahead picker in the Monitor setup.
+          A bundled snapshot is loaded automatically. Refresh from eBay to get the latest tree.
+        </p>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleRefreshCategories} disabled={refreshingCategories}>
+            <RefreshCw size={14} className={`mr-1.5 ${refreshingCategories ? 'animate-spin' : ''}`} />
+            {refreshingCategories ? 'Refreshing...' : 'Refresh from eBay'}
+          </Button>
+          {categoryMessage && (
+            <span className="text-xs text-muted-foreground">{categoryMessage}</span>
+          )}
         </div>
       </section>
 

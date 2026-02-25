@@ -129,7 +129,8 @@ export function generateMockListings(params: SearchParams, count?: number): Omit
         ...(Math.random() > 0.5 ? { Color: randomChoice(['Black', 'Silver', 'White', 'Gray', 'Blue']) } : {}),
         ...(Math.random() > 0.5 ? { 'Country/Region of Manufacture': 'United States' } : {})
       },
-      rawJson: '{}'
+      rawJson: '{}',
+      dismissedAt: null
     })
   }
 

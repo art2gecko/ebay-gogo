@@ -8,18 +8,23 @@ import { SettingsTab } from './components/settings/SettingsTab'
 import { useAppStore } from './stores/appStore'
 import { useMonitorStore } from './stores/monitorStore'
 import { useSearchStore } from './stores/searchStore'
+import { useViewStore } from './stores/viewStore'
 import { useIpcEvent } from './hooks/useIpc'
 import type { EngineStatus, Listing, Monitor } from '@shared/types'
 
 export default function App(): React.JSX.Element {
   const { activeTab, fetchEngineStatus, setEngineStatus } = useAppStore()
   const { fetchMonitors, updateMonitorInList } = useMonitorStore()
+  const { fetchViews } = useViewStore()
   const [showSaveMonitor, setShowSaveMonitor] = useState(false)
+  const [showCreateView, setShowCreateView] = useState(false)
+  const [showManageViews, setShowManageViews] = useState(false)
 
   useEffect(() => {
     fetchEngineStatus()
     fetchMonitors()
-  }, [fetchEngineStatus, fetchMonitors])
+    fetchViews()
+  }, [fetchEngineStatus, fetchMonitors, fetchViews])
 
   const handleStatusChanged = useCallback((status: EngineStatus) => {
     setEngineStatus(status)
@@ -38,19 +43,32 @@ export default function App(): React.JSX.Element {
     updateMonitorInList(monitor)
   }, [updateMonitorInList])
 
+  const handleClearResults = useCallback(() => {
+    useSearchStore.setState({ results: [] })
+  }, [])
+
   useIpcEvent('engine:status-changed', handleStatusChanged)
   useIpcEvent('engine:new-listings', handleNewListings)
   useIpcEvent('monitor:updated', handleMonitorUpdated)
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <TopBar onSaveMonitor={() => setShowSaveMonitor(true)} />
+      <TopBar
+        onSaveMonitor={() => setShowSaveMonitor(true)}
+        onClearResults={handleClearResults}
+        onCreateView={() => setShowCreateView(true)}
+        onManageViews={() => setShowManageViews(true)}
+      />
       <NavTabs />
       <main className="flex-1 flex flex-col min-h-0">
         {activeTab === 'search' && (
           <SearchLayout
             showSaveMonitor={showSaveMonitor}
             onCloseSaveMonitor={() => setShowSaveMonitor(false)}
+            showCreateView={showCreateView}
+            onCloseCreateView={() => setShowCreateView(false)}
+            showManageViews={showManageViews}
+            onCloseManageViews={() => setShowManageViews(false)}
           />
         )}
         {activeTab === 'monitors' && <MonitorsTab />}

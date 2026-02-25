@@ -4,7 +4,9 @@
 
 import type {
   Monitor, MonitorCreateInput, MonitorUpdateInput,
-  Listing, SearchParams, EngineStatus, AppSettings, LogEntry
+  Listing, SearchParams, EngineStatus, AppSettings, LogEntry,
+  CategorySearchResult, RecentCategory,
+  View, ViewCreateInput, ViewUpdateInput
 } from './types'
 
 // Request-Response channels (invoke/handle)
@@ -15,13 +17,20 @@ export interface IpcChannels {
   'monitors:create': { request: MonitorCreateInput; response: Monitor }
   'monitors:update': { request: MonitorUpdateInput; response: Monitor }
   'monitors:delete': { request: number; response: boolean }
+  'monitors:testSearch': { request: MonitorCreateInput; response: { count: number } }
 
   // Listings
   'listings:search': { request: SearchParams; response: Listing[] }
   'listings:getByMonitor': { request: { monitorId: number; limit?: number }; response: Listing[] }
-  'listings:getAll': { request: { limit?: number; offset?: number; monitorId?: number; dateFrom?: string; dateTo?: string }; response: Listing[] }
+  'listings:getAll': { request: { limit?: number; offset?: number; monitorId?: number; dateFrom?: string; dateTo?: string; includeDismissed?: boolean }; response: Listing[] }
   'listings:count': { request: { monitorId?: number; dateFrom?: string; dateTo?: string }; response: number }
   'listings:exportCsv': { request: { monitorId?: number; dateFrom?: string; dateTo?: string }; response: string }
+
+  // Dismiss / Delete
+  'listings:dismiss': { request: { itemIds: string[] }; response: number }
+  'listings:dismissByView': { request: { monitorIds?: number[]; groupNames?: string[] }; response: number }
+  'listings:resetDismissed': { request: { monitorIds?: number[]; groupNames?: string[] }; response: number }
+  'listings:deleteByScope': { request: { scope: 'view' | 'monitor' | 'group' | 'all'; monitorId?: number; groupName?: string }; response: number }
 
   // Engine
   'engine:start': { request: void; response: boolean }
@@ -46,6 +55,21 @@ export interface IpcChannels {
 
   // Exclude keywords
   'exclude:add': { request: { keyword: string; monitorId?: number }; response: boolean }
+
+  // Categories
+  'categories:search': { request: { query: string; limit?: number }; response: CategorySearchResult[] }
+  'categories:recent': { request: void; response: RecentCategory[] }
+  'categories:trackUsage': { request: { categoryId: string }; response: boolean }
+  'categories:refresh': { request: void; response: { success: boolean; count: number; message: string } }
+  'categories:count': { request: void; response: number }
+
+  // Views
+  'views:list': { request: void; response: View[] }
+  'views:get': { request: string; response: View | null }
+  'views:create': { request: ViewCreateInput; response: View }
+  'views:update': { request: ViewUpdateInput; response: View }
+  'views:delete': { request: string; response: boolean }
+  'views:setDefault': { request: string; response: boolean }
 }
 
 // Event channels (main -> renderer, one-way streaming)

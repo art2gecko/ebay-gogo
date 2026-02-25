@@ -1,10 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
+import { TestTube, X } from 'lucide-react'
 import { Dialog } from '../ui/dialog'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { Toggle } from '../ui/toggle'
+import { CategoryCombobox } from '../ui/CategoryCombobox'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { invoke } from '@/hooks/useIpc'
 import type { MonitorCreateInput } from '@shared/types'
 
 interface MonitorModalProps {
@@ -34,6 +37,10 @@ const VIEW_TYPE_OPTIONS = [
 export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.Element {
   const { createMonitor } = useMonitorStore()
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [excludeChips, setExcludeChips] = useState<string[]>([])
+  const [excludeInput, setExcludeInput] = useState('')
   const [form, setForm] = useState({
     keywords: '',
     group: 'Default',
@@ -42,58 +49,111 @@ export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.El
     condition: 'Any',
     format: 'BuyItNow' as const,
     freeShippingOnly: false,
-    excludeKeywords: '',
     sellerMinFeedback: '',
     usOnly: true,
     intervalSec: '60',
     viewType: 'Results' as const,
     searchInDesc: false,
-    categoryId: ''
+    categoryId: '',
+    categoryPath: '',
+    includeSubcategories: false
   })
 
   const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]): void => {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  const handleExcludeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      const trimmed = excludeInput.trim().replace(/,/g, '')
+      if (trimmed && !excludeChips.includes(trimmed)) {
+        setExcludeChips(c => [...c, trimmed])
+      }
+      setExcludeInput('')
+    } else if (e.key === 'Backspace' && !excludeInput && excludeChips.length > 0) {
+      setExcludeChips(c => c.slice(0, -1))
+    }
+  }
+
+  const handleExcludePaste = (e: React.ClipboardEvent): void => {
+    const text = e.clipboardData.getData('text')
+    if (text.includes(',')) {
+      e.preventDefault()
+      const newChips = text.split(',').map(s => s.trim()).filter(Boolean).filter(c => !excludeChips.includes(c))
+      setExcludeChips(c => [...c, ...newChips])
+      setExcludeInput('')
+    }
+  }
+
+  const buildInput = useCallback((): MonitorCreateInput => ({
+    enabled: true,
+    group: form.group || 'Default',
+    keywords: form.keywords.split(',').map(s => s.trim()).filter(Boolean),
+    searchInDesc: form.searchInDesc,
+    priceMin: form.priceMin ? Number(form.priceMin) : null,
+    priceMax: form.priceMax ? Number(form.priceMax) : null,
+    condition: form.condition,
+    format: form.format,
+    freeShippingOnly: form.freeShippingOnly,
+    excludeKeywords: excludeChips,
+    sellerMinFeedback: Number(form.sellerMinFeedback) || 0,
+    usOnly: form.usOnly,
+    totalPriceMode: false,
+    allowSellers: [],
+    denySellers: [],
+    intervalSec: Math.max(10, Number(form.intervalSec) || 60),
+    viewType: form.viewType,
+    site: 'EBAY-US',
+    locatedIn: '',
+    shipsTo: '',
+    categoryId: form.categoryId,
+    categoryPath: form.categoryPath,
+    includeSubcategories: form.includeSubcategories,
+    viewId: ''
+  }), [form, excludeChips])
+
+  const handleTestMonitor = useCallback(async () => {
+    if (!form.keywords.trim()) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await invoke('monitors:testSearch', buildInput())
+      setTestResult(`Found ${result.count} result(s)`)
+    } catch {
+      setTestResult('Test failed')
+    } finally {
+      setTesting(false)
+    }
+  }, [form.keywords, buildInput])
+
   const handleSave = async (): Promise<void> => {
     if (!form.keywords.trim()) return
     setSaving(true)
     try {
-      const input: MonitorCreateInput = {
-        enabled: true,
-        group: form.group || 'Default',
-        keywords: form.keywords.split(',').map((s) => s.trim()).filter(Boolean),
-        searchInDesc: form.searchInDesc,
-        priceMin: form.priceMin ? Number(form.priceMin) : null,
-        priceMax: form.priceMax ? Number(form.priceMax) : null,
-        condition: form.condition,
-        format: form.format,
-        freeShippingOnly: form.freeShippingOnly,
-        excludeKeywords: form.excludeKeywords.split(',').map((s) => s.trim()).filter(Boolean),
-        sellerMinFeedback: Number(form.sellerMinFeedback) || 0,
-        usOnly: form.usOnly,
-        totalPriceMode: false,
-        allowSellers: [],
-        denySellers: [],
-        intervalSec: Math.max(10, Number(form.intervalSec) || 60),
-        viewType: form.viewType,
-        site: 'EBAY-US',
-        locatedIn: '',
-        shipsTo: '',
-        categoryId: form.categoryId
-      }
-      await createMonitor(input)
+      await createMonitor(buildInput())
       onClose()
-      // Reset form
-      setForm({
-        keywords: '', group: 'Default', priceMin: '', priceMax: '',
-        condition: 'Any', format: 'BuyItNow', freeShippingOnly: false,
-        excludeKeywords: '', sellerMinFeedback: '', usOnly: true,
-        intervalSec: '60', viewType: 'Results', searchInDesc: false, categoryId: ''
-      })
+      resetForm()
     } finally {
       setSaving(false)
     }
+  }
+
+  const resetForm = (): void => {
+    setForm({
+      keywords: '', group: 'Default', priceMin: '', priceMax: '',
+      condition: 'Any', format: 'BuyItNow', freeShippingOnly: false,
+      sellerMinFeedback: '', usOnly: true,
+      intervalSec: '60', viewType: 'Results', searchInDesc: false,
+      categoryId: '', categoryPath: '', includeSubcategories: false
+    })
+    setExcludeChips([])
+    setExcludeInput('')
+    setTestResult(null)
+  }
+
+  const handleRefreshCategories = (): void => {
+    invoke('categories:refresh').catch(() => {})
   }
 
   return (
@@ -186,24 +246,55 @@ export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.El
             />
           </div>
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Category ID</label>
-            <Input
-              value={form.categoryId}
-              onChange={(e) => update('categoryId', e.target.value)}
-              className="h-7 text-xs"
-              placeholder="Optional"
+            <label className="text-[11px] text-muted-foreground mb-1 block">Category</label>
+            <CategoryCombobox
+              value={form.categoryId ? { categoryId: form.categoryId, categoryPath: form.categoryPath } : null}
+              onChange={(cat) => {
+                if (cat) {
+                  setForm(f => ({ ...f, categoryId: cat.categoryId, categoryPath: cat.path }))
+                } else {
+                  setForm(f => ({ ...f, categoryId: '', categoryPath: '' }))
+                }
+              }}
+              onRefreshCategories={handleRefreshCategories}
             />
           </div>
         </div>
 
+        {form.categoryId && (
+          <div className="pl-1">
+            <Toggle
+              checked={form.includeSubcategories}
+              onChange={(v) => update('includeSubcategories', v)}
+              label="Include subcategories"
+            />
+          </div>
+        )}
+
+        {/* Exclude keywords as chips */}
         <div>
           <label className="text-[11px] text-muted-foreground mb-1 block">Exclude Keywords</label>
-          <Input
-            value={form.excludeKeywords}
-            onChange={(e) => update('excludeKeywords', e.target.value)}
-            placeholder="broken, parts, ..."
-            className="h-7 text-xs"
-          />
+          <div className="flex flex-wrap gap-1 rounded-md border border-input bg-background px-2 py-1 min-h-[28px] items-center">
+            {excludeChips.map(chip => (
+              <span
+                key={chip}
+                className="inline-flex items-center gap-0.5 bg-muted rounded px-1.5 py-0.5 text-[10px]"
+              >
+                {chip}
+                <button onClick={() => setExcludeChips(c => c.filter(x => x !== chip))} className="hover:text-destructive">
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <input
+              value={excludeInput}
+              onChange={e => setExcludeInput(e.target.value)}
+              onKeyDown={handleExcludeKeyDown}
+              onPaste={handleExcludePaste}
+              placeholder={excludeChips.length === 0 ? 'Type and press Enter...' : ''}
+              className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
 
         <div>
@@ -224,10 +315,16 @@ export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.El
         </div>
 
         <div className="flex gap-2 mt-2">
-          <Button variant="outline" className="flex-1" onClick={onClose}>
+          <Button size="xs" variant="outline" onClick={handleTestMonitor} disabled={testing || !form.keywords.trim()}>
+            <TestTube size={12} className="mr-1" />
+            {testing ? 'Testing...' : 'Test'}
+          </Button>
+          {testResult && <span className="text-xs text-muted-foreground self-center">{testResult}</span>}
+          <div className="flex-1" />
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button className="flex-1" onClick={handleSave} disabled={saving || !form.keywords.trim()}>
+          <Button onClick={handleSave} disabled={saving || !form.keywords.trim()}>
             {saving ? 'Saving...' : 'Create Monitor'}
           </Button>
         </div>

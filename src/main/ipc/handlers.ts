@@ -2,10 +2,14 @@ import { ipcMain, shell } from 'electron'
 import {
   listMonitors, getMonitor, createMonitor, updateMonitor, deleteMonitor,
   getListings, getListingCount, exportListingsCsv, upsertListings,
-  getLogs, clearLogs, addDenySeller, removeDenySeller, addExcludeKeyword, addLog
+  getLogs, clearLogs, addDenySeller, removeDenySeller, addExcludeKeyword, addLog,
+  searchCategories, getRecentCategories, trackCategoryUsage, getCategoryCount,
+  listViews, getView, createView, updateView, deleteView, setDefaultView,
+  dismissListings, dismissByView, resetDismissed, deleteListingsByScope
 } from '../db/database'
 import { searchListings, setCredentials, testConnection } from '../ebay/client'
 import { startEngine, stopEngine, getStatus, refreshMonitors } from '../engine/engine'
+import { fetchAndStoreCategoryTree } from '../ebay/taxonomy'
 import { getSettings, saveSettings } from '../store'
 import type { IpcChannels } from '@shared/ipc-channels'
 
@@ -120,6 +124,52 @@ export function registerIpcHandlers(): void {
   // Exclude keywords
   // ============================================================
   handle('exclude:add', (_e, { keyword, monitorId }) => addExcludeKeyword(keyword, monitorId))
+
+  // ============================================================
+  // Test monitor (one-shot search to preview)
+  // ============================================================
+  handle('monitors:testSearch', async (_e, input) => {
+    const params = {
+      keywords: input.keywords.join(' '),
+      searchInDesc: input.searchInDesc,
+      priceMin: input.priceMin,
+      priceMax: input.priceMax,
+      condition: input.condition,
+      format: input.format,
+      freeShippingOnly: input.freeShippingOnly,
+      categoryId: input.categoryId || undefined,
+      limit: 10
+    }
+    const results = await searchListings(params)
+    return { count: results.length }
+  })
+
+  // ============================================================
+  // Categories
+  // ============================================================
+  handle('categories:search', (_e, { query, limit }) => searchCategories(query, limit || 50))
+  handle('categories:recent', () => getRecentCategories(10))
+  handle('categories:trackUsage', (_e, { categoryId }) => trackCategoryUsage(categoryId))
+  handle('categories:refresh', () => fetchAndStoreCategoryTree())
+  handle('categories:count', () => getCategoryCount())
+
+  // ============================================================
+  // Views
+  // ============================================================
+  handle('views:list', () => listViews())
+  handle('views:get', (_e, id) => getView(id))
+  handle('views:create', (_e, input) => createView(input))
+  handle('views:update', (_e, input) => updateView(input))
+  handle('views:delete', (_e, id) => deleteView(id))
+  handle('views:setDefault', (_e, id) => setDefaultView(id))
+
+  // ============================================================
+  // Dismiss / Delete
+  // ============================================================
+  handle('listings:dismiss', (_e, { itemIds }) => dismissListings(itemIds))
+  handle('listings:dismissByView', (_e, params) => dismissByView(params.monitorIds, params.groupNames))
+  handle('listings:resetDismissed', (_e, params) => resetDismissed(params.monitorIds, params.groupNames))
+  handle('listings:deleteByScope', (_e, params) => deleteListingsByScope(params.scope, params.monitorId, params.groupName))
 
   // ============================================================
   // Shell operations (not IPC channel, direct)
