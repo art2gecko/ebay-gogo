@@ -4,6 +4,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { Badge } from '../ui/badge'
+import { ThemeToggle } from '../ui/ThemeToggle'
 import { useSearchStore } from '@/stores/searchStore'
 import { useAppStore } from '@/stores/appStore'
 import { timeAgo } from '@/lib/utils'
@@ -87,6 +88,8 @@ export function TopBar({ onSaveMonitor }: TopBarProps): React.JSX.Element {
           Start
         </Button>
       )}
+
+      <ThemeToggle />
 
       {/* Status pill */}
       <div className="flex items-center gap-2 shrink-0 ml-auto">

@@ -7,6 +7,7 @@ import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { invoke } from '@/hooks/useIpc'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { useAppStore } from '@/stores/appStore'
 import { formatPrice, timeAgo } from '@/lib/utils'
 import type { Listing } from '@shared/types'
 
@@ -15,6 +16,7 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 export function HistoryTab(): React.JSX.Element {
   const { monitors } = useMonitorStore()
+  const theme = useAppStore((s) => s.theme)
   const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
@@ -137,7 +139,7 @@ export function HistoryTab(): React.JSX.Element {
       </div>
 
       {/* Results grid */}
-      <div className="ag-theme-alpine-dark flex-1">
+      <div className={`${theme === 'dark' ? 'ag-theme-alpine-dark' : 'ag-theme-alpine'} flex-1`}>
         <AgGridReact<Listing>
           rowData={listings}
           columnDefs={columnDefs}

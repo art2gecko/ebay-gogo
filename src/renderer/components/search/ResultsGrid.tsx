@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import type { ColDef, RowClickedEvent, CellKeyDownEvent } from 'ag-grid-community'
 import { useSearchStore } from '@/stores/searchStore'
+import { useAppStore } from '@/stores/appStore'
 import { formatPrice, timeAgo, copyToClipboard } from '@/lib/utils'
 import { openExternal } from '@/hooks/useIpc'
 import type { Listing } from '@shared/types'
@@ -11,6 +12,7 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 export function ResultsGrid(): React.JSX.Element {
   const { results, selectedListing, setSelectedListing, ignoreSeller, addExcludeKeyword } = useSearchStore()
+  const theme = useAppStore((s) => s.theme)
   const gridRef = useRef<AgGridReact>(null)
   const selectedRef = useRef<Listing | null>(null)
 
@@ -157,7 +159,7 @@ export function ResultsGrid(): React.JSX.Element {
   }, [setSelectedListing])
 
   return (
-    <div className="ag-theme-alpine-dark flex-1 w-full">
+    <div className={`${theme === 'dark' ? 'ag-theme-alpine-dark' : 'ag-theme-alpine'} flex-1 w-full`}>
       <AgGridReact<Listing>
         ref={gridRef}
         rowData={results}

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import type { ColDef, CellValueChangedEvent } from 'ag-grid-community'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { useAppStore } from '@/stores/appStore'
 import { Badge } from '../ui/badge'
 import { timeAgo } from '@/lib/utils'
 import type { Monitor } from '@shared/types'
@@ -11,6 +12,7 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 export function MonitorsBottomTable(): React.JSX.Element {
   const { monitors, fetchMonitors, updateMonitor } = useMonitorStore()
+  const theme = useAppStore((s) => s.theme)
 
   useEffect(() => {
     fetchMonitors()
@@ -184,7 +186,7 @@ export function MonitorsBottomTable(): React.JSX.Element {
   }), [])
 
   return (
-    <div className="ag-theme-alpine-dark h-full w-full">
+    <div className={`${theme === 'dark' ? 'ag-theme-alpine-dark' : 'ag-theme-alpine'} h-full w-full`}>
       <AgGridReact<Monitor>
         rowData={monitors}
         columnDefs={columnDefs}

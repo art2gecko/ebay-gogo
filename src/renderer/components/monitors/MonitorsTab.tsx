@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { MonitorModal } from './MonitorModal'
 import { useMonitorStore } from '@/stores/monitorStore'
+import { useAppStore } from '@/stores/appStore'
 import { timeAgo } from '@/lib/utils'
 import type { Monitor, MonitorCreateInput } from '@shared/types'
 
@@ -14,6 +15,7 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 export function MonitorsTab(): React.JSX.Element {
   const { monitors, fetchMonitors, updateMonitor, deleteMonitor, createMonitor } = useMonitorStore()
+  const theme = useAppStore((s) => s.theme)
   const [showModal, setShowModal] = useState(false)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [quickKeywords, setQuickKeywords] = useState('')
@@ -171,7 +173,7 @@ export function MonitorsTab(): React.JSX.Element {
         </span>
       </div>
 
-      <div className="ag-theme-alpine-dark flex-1">
+      <div className={`${theme === 'dark' ? 'ag-theme-alpine-dark' : 'ag-theme-alpine'} flex-1`}>
         <AgGridReact<Monitor>
           rowData={monitors}
           columnDefs={columnDefs}
