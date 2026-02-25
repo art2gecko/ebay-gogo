@@ -7,6 +7,7 @@ import { runMigrations } from './migrations'
 import type {
   Monitor, MonitorCreateInput, MonitorUpdateInput,
   Listing, LogEntry, EbayCategory, CategorySearchResult, RecentCategory,
+  FavoriteCategory,
   View, ViewCreateInput, ViewUpdateInput
 } from '@shared/types'
 
@@ -740,6 +741,74 @@ export function saveCategoryTree(treeId: string, marketplace: string, version: s
     INSERT OR REPLACE INTO category_trees (treeId, marketplace, fetchedAt, version, rawJson)
     VALUES (?, ?, ?, ?, ?)
   `).run(treeId, marketplace, Date.now(), version, rawJson)
+}
+
+export function getTopLevelCategories(marketplace?: string): EbayCategory[] {
+  const mp = marketplace || 'EBAY_US'
+  const rows = getDb().prepare(
+    `SELECT categoryId, parentId, name, path, isLeaf, marketplace
+     FROM categories WHERE parentId = '' AND marketplace = ?
+     ORDER BY name ASC`
+  ).all(mp) as Record<string, unknown>[]
+  return rows.map(r => ({
+    categoryId: r.categoryId as string,
+    parentId: r.parentId as string,
+    name: r.name as string,
+    path: r.path as string,
+    isLeaf: !!(r.isLeaf as number),
+    marketplace: r.marketplace as string
+  }))
+}
+
+export function getChildrenCategories(parentId: string, marketplace?: string): EbayCategory[] {
+  const mp = marketplace || 'EBAY_US'
+  const rows = getDb().prepare(
+    `SELECT categoryId, parentId, name, path, isLeaf, marketplace
+     FROM categories WHERE parentId = ? AND marketplace = ?
+     ORDER BY name ASC`
+  ).all(parentId, mp) as Record<string, unknown>[]
+  return rows.map(r => ({
+    categoryId: r.categoryId as string,
+    parentId: r.parentId as string,
+    name: r.name as string,
+    path: r.path as string,
+    isLeaf: !!(r.isLeaf as number),
+    marketplace: r.marketplace as string
+  }))
+}
+
+export function getFavoriteCategories(): FavoriteCategory[] {
+  const rows = getDb().prepare(`
+    SELECT fc.categoryId, c.name, c.path, c.isLeaf, fc.starredAt
+    FROM favorite_categories fc
+    LEFT JOIN categories c ON fc.categoryId = c.categoryId
+    ORDER BY fc.starredAt DESC
+  `).all() as Record<string, unknown>[]
+  return rows.map(r => ({
+    categoryId: r.categoryId as string,
+    name: (r.name as string) || 'Unknown',
+    path: (r.path as string) || '',
+    isLeaf: !!(r.isLeaf as number),
+    starredAt: r.starredAt as number
+  }))
+}
+
+export function toggleFavoriteCategory(categoryId: string, isFav: boolean): boolean {
+  if (isFav) {
+    getDb().prepare(
+      'INSERT OR REPLACE INTO favorite_categories (categoryId, starredAt) VALUES (?, ?)'
+    ).run(categoryId, Date.now())
+  } else {
+    getDb().prepare('DELETE FROM favorite_categories WHERE categoryId = ?').run(categoryId)
+  }
+  return true
+}
+
+export function isCategoryFavorited(categoryId: string): boolean {
+  const row = getDb().prepare(
+    'SELECT categoryId FROM favorite_categories WHERE categoryId = ?'
+  ).get(categoryId)
+  return !!row
 }
 
 // ============================================================

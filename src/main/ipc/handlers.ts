@@ -4,6 +4,7 @@ import {
   getListings, getListingCount, exportListingsCsv, upsertListings,
   getLogs, clearLogs, addDenySeller, removeDenySeller, addExcludeKeyword, addLog,
   searchCategories, getRecentCategories, trackCategoryUsage, getCategoryCount,
+  getTopLevelCategories, getChildrenCategories, getFavoriteCategories, toggleFavoriteCategory,
   listViews, getView, createView, updateView, deleteView, setDefaultView,
   dismissListings, dismissByView, resetDismissed, deleteListingsByScope
 } from '../db/database'
@@ -141,7 +142,16 @@ export function registerIpcHandlers(): void {
       limit: 10
     }
     const results = await searchListings(params)
-    return { count: results.length }
+    const sampleListings = results.slice(0, 3).map(r => ({
+      title: r.title,
+      total: r.total
+    }))
+    const suggestions: string[] = []
+    if (results.length >= 10 && !input.categoryId) suggestions.push('Add a category to narrow results')
+    if (results.length >= 10 && input.priceMin == null) suggestions.push('Set a minimum price to filter low-value items')
+    if (results.length >= 10 && input.excludeKeywords.length === 0) suggestions.push('Add exclude keywords to remove irrelevant listings')
+    if (results.length === 0) suggestions.push('Try broader keywords or remove filters')
+    return { count: results.length, sampleListings, suggestions }
   })
 
   // ============================================================
@@ -152,6 +162,10 @@ export function registerIpcHandlers(): void {
   handle('categories:trackUsage', (_e, { categoryId }) => trackCategoryUsage(categoryId))
   handle('categories:refresh', () => fetchAndStoreCategoryTree())
   handle('categories:count', () => getCategoryCount())
+  handle('categories:topLevel', (_e, { marketplace }) => getTopLevelCategories(marketplace))
+  handle('categories:children', (_e, { parentId, marketplace }) => getChildrenCategories(parentId, marketplace))
+  handle('categories:favorites', () => getFavoriteCategories())
+  handle('categories:toggleFavorite', (_e, { categoryId, isFav }) => toggleFavoriteCategory(categoryId, isFav))
 
   // ============================================================
   // Views

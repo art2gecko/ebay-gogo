@@ -1,18 +1,23 @@
 import React, { useState, useCallback } from 'react'
-import { TestTube, X } from 'lucide-react'
+import {
+  TestTube, X, ChevronDown, ChevronUp, FolderOpen, Info, Zap
+} from 'lucide-react'
 import { Dialog } from '../ui/dialog'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Select } from '../ui/select'
 import { Toggle } from '../ui/toggle'
 import { CategoryCombobox } from '../ui/CategoryCombobox'
+import { CategoryExplorer } from '../ui/CategoryExplorer'
 import { useMonitorStore } from '@/stores/monitorStore'
 import { invoke } from '@/hooks/useIpc'
-import type { MonitorCreateInput } from '@shared/types'
+import { formatPrice, cn } from '@/lib/utils'
+import type { MonitorCreateInput, TestSearchPreview } from '@shared/types'
 
 interface MonitorModalProps {
   open: boolean
   onClose: () => void
+  onCreated?: (monitorId: number) => void
 }
 
 const FORMAT_OPTIONS = [
@@ -29,37 +34,74 @@ const CONDITION_OPTIONS = [
   { value: 'Used', label: 'Used' }
 ]
 
-const VIEW_TYPE_OPTIONS = [
-  { value: 'Results', label: 'Results' },
-  { value: 'AuctionEnding', label: 'Auction Ending' }
+interface Preset {
+  label: string
+  apply: (form: FormState) => FormState
+  applyExcludes?: (chips: string[]) => string[]
+}
+
+const PRESETS: Preset[] = [
+  {
+    label: 'BIN \u2022 Newly Listed',
+    apply: (f) => ({ ...f, format: 'BuyItNow' as const, viewType: 'Results' as const })
+  },
+  {
+    label: 'Auction \u2022 Ending Soon',
+    apply: (f) => ({ ...f, format: 'Auction' as const, viewType: 'AuctionEnding' as const })
+  },
+  {
+    label: 'Free Ship \u2022 US Only',
+    apply: (f) => ({ ...f, freeShippingOnly: true, usOnly: true })
+  },
+  {
+    label: 'Lots (excl broken/parts)',
+    apply: (f) => f,
+    applyExcludes: (chips) => {
+      const toAdd = ['broken', 'parts', 'for parts', 'not working', 'as is']
+      const existing = new Set(chips.map(c => c.toLowerCase()))
+      return [...chips, ...toAdd.filter(k => !existing.has(k))]
+    }
+  }
 ]
 
-export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.Element {
+interface FormState {
+  keywords: string
+  group: string
+  priceMin: string
+  priceMax: string
+  condition: string
+  format: 'BuyItNow' | 'Auction' | 'All'
+  freeShippingOnly: boolean
+  sellerMinFeedback: string
+  usOnly: boolean
+  intervalSec: string
+  viewType: 'Results' | 'AuctionEnding'
+  searchInDesc: boolean
+  categoryId: string
+  categoryPath: string
+  includeSubcategories: boolean
+}
+
+const DEFAULT_FORM: FormState = {
+  keywords: '', group: 'Default', priceMin: '', priceMax: '',
+  condition: 'Any', format: 'BuyItNow', freeShippingOnly: false,
+  sellerMinFeedback: '', usOnly: true,
+  intervalSec: '60', viewType: 'Results', searchInDesc: false,
+  categoryId: '', categoryPath: '', includeSubcategories: false
+}
+
+export function MonitorModal({ open, onClose, onCreated }: MonitorModalProps): React.JSX.Element {
   const { createMonitor } = useMonitorStore()
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<TestSearchPreview | null>(null)
   const [excludeChips, setExcludeChips] = useState<string[]>([])
   const [excludeInput, setExcludeInput] = useState('')
-  const [form, setForm] = useState({
-    keywords: '',
-    group: 'Default',
-    priceMin: '',
-    priceMax: '',
-    condition: 'Any',
-    format: 'BuyItNow' as const,
-    freeShippingOnly: false,
-    sellerMinFeedback: '',
-    usOnly: true,
-    intervalSec: '60',
-    viewType: 'Results' as const,
-    searchInDesc: false,
-    categoryId: '',
-    categoryPath: '',
-    includeSubcategories: false
-  })
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showExplorer, setShowExplorer] = useState(false)
+  const [form, setForm] = useState<FormState>({ ...DEFAULT_FORM })
 
-  const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]): void => {
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
@@ -119,9 +161,9 @@ export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.El
     setTestResult(null)
     try {
       const result = await invoke('monitors:testSearch', buildInput())
-      setTestResult(`Found ${result.count} result(s)`)
+      setTestResult(result)
     } catch {
-      setTestResult('Test failed')
+      setTestResult({ count: 0, sampleListings: [], suggestions: ['Test failed - check your connection'] })
     } finally {
       setTesting(false)
     }
@@ -131,7 +173,8 @@ export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.El
     if (!form.keywords.trim()) return
     setSaving(true)
     try {
-      await createMonitor(buildInput())
+      const monitor = await createMonitor(buildInput())
+      onCreated?.(monitor.id)
       onClose()
       resetForm()
     } finally {
@@ -140,195 +183,299 @@ export function MonitorModal({ open, onClose }: MonitorModalProps): React.JSX.El
   }
 
   const resetForm = (): void => {
-    setForm({
-      keywords: '', group: 'Default', priceMin: '', priceMax: '',
-      condition: 'Any', format: 'BuyItNow', freeShippingOnly: false,
-      sellerMinFeedback: '', usOnly: true,
-      intervalSec: '60', viewType: 'Results', searchInDesc: false,
-      categoryId: '', categoryPath: '', includeSubcategories: false
-    })
+    setForm({ ...DEFAULT_FORM })
     setExcludeChips([])
     setExcludeInput('')
     setTestResult(null)
+    setShowAdvanced(false)
   }
 
-  const handleRefreshCategories = (): void => {
-    invoke('categories:refresh').catch(() => {})
+  const handlePreset = (preset: Preset) => {
+    setForm(f => preset.apply(f))
+    if (preset.applyExcludes) {
+      setExcludeChips(c => preset.applyExcludes!(c))
+    }
+  }
+
+  // Keyboard shortcut: Ctrl+Enter to create
+  const handleModalKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault()
+      if (form.keywords.trim() && !saving) {
+        handleSave()
+      }
+    }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="New Monitor" className="max-w-md">
-      <div className="flex flex-col gap-3">
-        <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">Keywords (comma separated)</label>
-          <Input
-            value={form.keywords}
-            onChange={(e) => update('keywords', e.target.value)}
-            placeholder="MacBook Pro, iPhone 15..."
-            className="h-8 text-xs"
-            autoFocus
-          />
-        </div>
+    <>
+      <Dialog open={open} onClose={onClose} title="New Monitor" className="max-w-lg">
+        <div className="flex flex-col gap-3" onKeyDown={handleModalKeyDown}>
+          {/* Presets */}
+          <div className="flex flex-wrap gap-1.5">
+            {PRESETS.map(preset => (
+              <button
+                key={preset.label}
+                onClick={() => handlePreset(preset)}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-medium',
+                  'border border-border bg-muted/30 hover:bg-muted/60 transition-colors'
+                )}
+              >
+                <Zap size={9} />
+                {preset.label}
+              </button>
+            ))}
+          </div>
 
-        <div className="grid grid-cols-2 gap-3">
+          {/* Keywords */}
           <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Group</label>
+            <label className="text-[11px] text-muted-foreground mb-1 block">Keywords (comma separated)</label>
             <Input
-              value={form.group}
-              onChange={(e) => update('group', e.target.value)}
-              className="h-7 text-xs"
+              value={form.keywords}
+              onChange={(e) => update('keywords', e.target.value)}
+              placeholder="MacBook Pro, iPhone 15..."
+              className="h-8 text-xs"
+              autoFocus
             />
           </div>
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Interval (sec)</label>
-            <Input
-              type="number"
-              value={form.intervalSec}
-              onChange={(e) => update('intervalSec', e.target.value)}
-              className="h-7 text-xs"
-              min="10"
-            />
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Price Min</label>
-            <Input
-              type="number"
-              value={form.priceMin}
-              onChange={(e) => update('priceMin', e.target.value)}
-              className="h-7 text-xs"
-              placeholder="0"
-            />
+          {/* Basic Fields: Group, Interval, Format */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[11px] text-muted-foreground mb-1 block">Group</label>
+              <Input
+                value={form.group}
+                onChange={(e) => update('group', e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground mb-1 block">
+                Interval (sec)
+                <span className="inline-block ml-1 cursor-help" title="How often to check for new listings (minimum 10s)">
+                  <Info size={9} className="inline text-muted-foreground" />
+                </span>
+              </label>
+              <Input
+                type="number"
+                value={form.intervalSec}
+                onChange={(e) => update('intervalSec', e.target.value)}
+                className="h-7 text-xs"
+                min="10"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground mb-1 block">Format</label>
+              <Select
+                value={form.format}
+                onChange={(e) => update('format', e.target.value as FormState['format'])}
+                options={FORMAT_OPTIONS}
+                className="h-7 text-xs w-full"
+              />
+            </div>
           </div>
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Price Max</label>
-            <Input
-              type="number"
-              value={form.priceMax}
-              onChange={(e) => update('priceMax', e.target.value)}
-              className="h-7 text-xs"
-              placeholder="999"
-            />
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Format</label>
-            <Select
-              value={form.format}
-              onChange={(e) => update('format', e.target.value as typeof form.format)}
-              options={FORMAT_OPTIONS}
-              className="h-7 text-xs w-full"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Condition</label>
-            <Select
-              value={form.condition}
-              onChange={(e) => update('condition', e.target.value)}
-              options={CONDITION_OPTIONS}
-              className="h-7 text-xs w-full"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">View Type</label>
-            <Select
-              value={form.viewType}
-              onChange={(e) => update('viewType', e.target.value as typeof form.viewType)}
-              options={VIEW_TYPE_OPTIONS}
-              className="h-7 text-xs w-full"
-            />
-          </div>
+          {/* Category + Browse */}
           <div>
             <label className="text-[11px] text-muted-foreground mb-1 block">Category</label>
-            <CategoryCombobox
-              value={form.categoryId ? { categoryId: form.categoryId, categoryPath: form.categoryPath } : null}
-              onChange={(cat) => {
-                if (cat) {
-                  setForm(f => ({ ...f, categoryId: cat.categoryId, categoryPath: cat.path }))
-                } else {
-                  setForm(f => ({ ...f, categoryId: '', categoryPath: '' }))
-                }
-              }}
-              onRefreshCategories={handleRefreshCategories}
-            />
-          </div>
-        </div>
-
-        {form.categoryId && (
-          <div className="pl-1">
-            <Toggle
-              checked={form.includeSubcategories}
-              onChange={(v) => update('includeSubcategories', v)}
-              label="Include subcategories"
-            />
-          </div>
-        )}
-
-        {/* Exclude keywords as chips */}
-        <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">Exclude Keywords</label>
-          <div className="flex flex-wrap gap-1 rounded-md border border-input bg-background px-2 py-1 min-h-[28px] items-center">
-            {excludeChips.map(chip => (
-              <span
-                key={chip}
-                className="inline-flex items-center gap-0.5 bg-muted rounded px-1.5 py-0.5 text-[10px]"
+            <div className="flex gap-1.5">
+              <div className="flex-1">
+                <CategoryCombobox
+                  value={form.categoryId ? { categoryId: form.categoryId, categoryPath: form.categoryPath } : null}
+                  onChange={(cat) => {
+                    if (cat) {
+                      setForm(f => ({ ...f, categoryId: cat.categoryId, categoryPath: cat.path }))
+                    } else {
+                      setForm(f => ({ ...f, categoryId: '', categoryPath: '' }))
+                    }
+                  }}
+                  onBrowse={() => setShowExplorer(true)}
+                />
+              </div>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setShowExplorer(true)}
+                className="shrink-0 h-7"
+                title="Browse categories"
               >
-                {chip}
-                <button onClick={() => setExcludeChips(c => c.filter(x => x !== chip))} className="hover:text-destructive">
-                  <X size={10} />
-                </button>
-              </span>
-            ))}
-            <input
-              value={excludeInput}
-              onChange={e => setExcludeInput(e.target.value)}
-              onKeyDown={handleExcludeKeyDown}
-              onPaste={handleExcludePaste}
-              placeholder={excludeChips.length === 0 ? 'Type and press Enter...' : ''}
-              className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-            />
+                <FolderOpen size={12} />
+              </Button>
+            </div>
+            {form.categoryId && (
+              <div className="flex items-center gap-3 mt-1.5 pl-1">
+                <Toggle
+                  checked={form.includeSubcategories}
+                  onChange={(v) => update('includeSubcategories', v)}
+                  label="Include subcategories"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Price Max (basic) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] text-muted-foreground mb-1 block">Price Max</label>
+              <Input
+                type="number"
+                value={form.priceMax}
+                onChange={(e) => update('priceMax', e.target.value)}
+                className="h-7 text-xs"
+                placeholder="999"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={() => setShowAdvanced(v => !v)}
+                className="text-[11px] text-primary hover:underline flex items-center gap-1 pb-1"
+              >
+                {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {showAdvanced ? 'Hide Advanced' : 'Show Advanced'}
+              </button>
+            </div>
+          </div>
+
+          {/* Advanced Section */}
+          {showAdvanced && (
+            <div className="flex flex-col gap-3 pl-3 border-l-2 border-primary/20">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Price Min</label>
+                  <Input
+                    type="number"
+                    value={form.priceMin}
+                    onChange={(e) => update('priceMin', e.target.value)}
+                    className="h-7 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Condition</label>
+                  <Select
+                    value={form.condition}
+                    onChange={(e) => update('condition', e.target.value)}
+                    options={CONDITION_OPTIONS}
+                    className="h-7 text-xs w-full"
+                  />
+                </div>
+              </div>
+
+              {/* Exclude keywords as chips */}
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">Exclude Keywords</label>
+                <div className="flex flex-wrap gap-1 rounded-md border border-input bg-background px-2 py-1 min-h-[28px] items-center">
+                  {excludeChips.map(chip => (
+                    <span
+                      key={chip}
+                      className="inline-flex items-center gap-0.5 bg-muted rounded px-1.5 py-0.5 text-[10px]"
+                    >
+                      {chip}
+                      <button onClick={() => setExcludeChips(c => c.filter(x => x !== chip))} className="hover:text-destructive">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    value={excludeInput}
+                    onChange={e => setExcludeInput(e.target.value)}
+                    onKeyDown={handleExcludeKeyDown}
+                    onPaste={handleExcludePaste}
+                    placeholder={excludeChips.length === 0 ? 'Type and press Enter...' : ''}
+                    className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">
+                  Min Seller Feedback
+                  <span className="inline-block ml-1 cursor-help" title="Minimum seller feedback score to include">
+                    <Info size={9} className="inline text-muted-foreground" />
+                  </span>
+                </label>
+                <Input
+                  type="number"
+                  value={form.sellerMinFeedback}
+                  onChange={(e) => update('sellerMinFeedback', e.target.value)}
+                  className="h-7 text-xs"
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="flex gap-4 flex-wrap">
+                <Toggle checked={form.freeShippingOnly} onChange={(v) => update('freeShippingOnly', v)} label="Free shipping" />
+                <Toggle checked={form.usOnly} onChange={(v) => update('usOnly', v)} label="US only" />
+                <Toggle
+                  checked={form.searchInDesc}
+                  onChange={(v) => update('searchInDesc', v)}
+                  label="Search desc"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Test Result Preview */}
+          {testResult && (
+            <div className="rounded-md border border-border bg-muted/20 p-2 text-xs space-y-1">
+              <div className="font-medium">
+                {testResult.count === 0 ? 'No results found' : `Found ${testResult.count} result(s)`}
+              </div>
+              {testResult.sampleListings.length > 0 && (
+                <div className="space-y-0.5">
+                  {testResult.sampleListings.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                      <span className="truncate flex-1">{item.title}</span>
+                      <span className="shrink-0 font-medium text-foreground">{formatPrice(item.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {testResult.suggestions.length > 0 && (
+                <div className="text-[10px] text-muted-foreground pt-1 border-t border-border mt-1 space-y-0.5">
+                  {testResult.suggestions.map((s, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <Info size={9} className="shrink-0" /> {s}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 mt-1">
+            <Button size="xs" variant="outline" onClick={handleTestMonitor} disabled={testing || !form.keywords.trim()}>
+              <TestTube size={12} className="mr-1" />
+              {testing ? 'Testing...' : 'Test'}
+            </Button>
+            <div className="flex-1" />
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving || !form.keywords.trim()}>
+              {saving ? 'Saving...' : 'Create Monitor'}
+            </Button>
+          </div>
+
+          {/* Keyboard hint */}
+          <div className="text-[10px] text-muted-foreground text-right -mt-1">
+            Ctrl+Enter to create
           </div>
         </div>
+      </Dialog>
 
-        <div>
-          <label className="text-[11px] text-muted-foreground mb-1 block">Min Seller Feedback</label>
-          <Input
-            type="number"
-            value={form.sellerMinFeedback}
-            onChange={(e) => update('sellerMinFeedback', e.target.value)}
-            className="h-7 text-xs"
-            placeholder="0"
-          />
-        </div>
-
-        <div className="flex gap-4">
-          <Toggle checked={form.freeShippingOnly} onChange={(v) => update('freeShippingOnly', v)} label="Free shipping" />
-          <Toggle checked={form.usOnly} onChange={(v) => update('usOnly', v)} label="US only" />
-          <Toggle checked={form.searchInDesc} onChange={(v) => update('searchInDesc', v)} label="Search desc" />
-        </div>
-
-        <div className="flex gap-2 mt-2">
-          <Button size="xs" variant="outline" onClick={handleTestMonitor} disabled={testing || !form.keywords.trim()}>
-            <TestTube size={12} className="mr-1" />
-            {testing ? 'Testing...' : 'Test'}
-          </Button>
-          {testResult && <span className="text-xs text-muted-foreground self-center">{testResult}</span>}
-          <div className="flex-1" />
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving || !form.keywords.trim()}>
-            {saving ? 'Saving...' : 'Create Monitor'}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
+      {/* Category Explorer dialog */}
+      <CategoryExplorer
+        open={showExplorer}
+        onClose={() => setShowExplorer(false)}
+        onSelect={(cat) => {
+          setForm(f => ({ ...f, categoryId: cat.categoryId, categoryPath: cat.path }))
+        }}
+        includeSubcategories={form.includeSubcategories}
+        onIncludeSubcategoriesChange={(v) => update('includeSubcategories', v)}
+      />
+    </>
   )
 }

@@ -5,7 +5,8 @@
 import type {
   Monitor, MonitorCreateInput, MonitorUpdateInput,
   Listing, SearchParams, EngineStatus, AppSettings, LogEntry,
-  CategorySearchResult, RecentCategory,
+  CategorySearchResult, RecentCategory, FavoriteCategory, EbayCategory,
+  TestSearchPreview,
   View, ViewCreateInput, ViewUpdateInput
 } from './types'
 
@@ -17,7 +18,7 @@ export interface IpcChannels {
   'monitors:create': { request: MonitorCreateInput; response: Monitor }
   'monitors:update': { request: MonitorUpdateInput; response: Monitor }
   'monitors:delete': { request: number; response: boolean }
-  'monitors:testSearch': { request: MonitorCreateInput; response: { count: number } }
+  'monitors:testSearch': { request: MonitorCreateInput; response: TestSearchPreview }
 
   // Listings
   'listings:search': { request: SearchParams; response: Listing[] }
@@ -57,11 +58,15 @@ export interface IpcChannels {
   'exclude:add': { request: { keyword: string; monitorId?: number }; response: boolean }
 
   // Categories
-  'categories:search': { request: { query: string; limit?: number }; response: CategorySearchResult[] }
+  'categories:search': { request: { query: string; marketplace?: string; limit?: number }; response: CategorySearchResult[] }
   'categories:recent': { request: void; response: RecentCategory[] }
   'categories:trackUsage': { request: { categoryId: string }; response: boolean }
   'categories:refresh': { request: void; response: { success: boolean; count: number; message: string } }
   'categories:count': { request: void; response: number }
+  'categories:topLevel': { request: { marketplace?: string }; response: EbayCategory[] }
+  'categories:children': { request: { parentId: string; marketplace?: string }; response: EbayCategory[] }
+  'categories:favorites': { request: void; response: FavoriteCategory[] }
+  'categories:toggleFavorite': { request: { categoryId: string; isFav: boolean }; response: boolean }
 
   // Views
   'views:list': { request: void; response: View[] }

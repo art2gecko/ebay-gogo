@@ -135,6 +135,16 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       );
     `
   }
+  ,{
+    version: 3,
+    sql: `
+      CREATE TABLE IF NOT EXISTS favorite_categories (
+        categoryId TEXT PRIMARY KEY,
+        starredAt INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_categories_parentId ON categories(parentId);
+    `
+  }
 ]
 
 export function runMigrations(db: DatabaseWrapper): void {

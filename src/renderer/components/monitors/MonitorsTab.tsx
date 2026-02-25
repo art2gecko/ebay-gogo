@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { Plus, Trash2, Search } from 'lucide-react'
 import { AgGridReact } from 'ag-grid-react'
 import type { ColDef, CellValueChangedEvent, RowSelectedEvent } from 'ag-grid-community'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { MonitorModal } from './MonitorModal'
+import { Toast } from '../ui/Toast'
 import { useMonitorStore } from '@/stores/monitorStore'
 import { useAppStore } from '@/stores/appStore'
 import { timeAgo } from '@/lib/utils'
@@ -20,6 +21,8 @@ export function MonitorsTab(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [quickKeywords, setQuickKeywords] = useState('')
   const [quickCreating, setQuickCreating] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const gridRef = useRef<AgGridReact<Monitor>>(null)
 
   const handleQuickCreate = useCallback(async () => {
     const trimmed = quickKeywords.trim()
@@ -47,14 +50,37 @@ export function MonitorsTab(): React.JSX.Element {
         site: 'EBAY-US',
         locatedIn: '',
         shipsTo: '',
-        categoryId: ''
+        categoryId: '',
+        categoryPath: '',
+        includeSubcategories: false,
+        viewId: ''
       }
-      await createMonitor(input)
+      const monitor = await createMonitor(input)
       setQuickKeywords('')
+      setToast('Monitor created and enabled')
+      selectMonitorInGrid(monitor.id)
     } finally {
       setQuickCreating(false)
     }
   }, [quickKeywords, quickCreating, createMonitor])
+
+  const handleMonitorCreated = useCallback((monitorId: number) => {
+    setToast('Monitor created and enabled')
+    // Slight delay to let the grid update
+    setTimeout(() => selectMonitorInGrid(monitorId), 100)
+  }, [])
+
+  const selectMonitorInGrid = (monitorId: number) => {
+    const api = gridRef.current?.api
+    if (!api) return
+    api.deselectAll()
+    api.forEachNode(node => {
+      if (node.data?.id === monitorId) {
+        node.setSelected(true)
+        api.ensureNodeVisible(node, 'middle')
+      }
+    })
+  }
 
   useEffect(() => {
     fetchMonitors()
@@ -175,6 +201,7 @@ export function MonitorsTab(): React.JSX.Element {
 
       <div className={`${theme === 'dark' ? 'ag-theme-alpine-dark' : 'ag-theme-alpine'} flex-1`}>
         <AgGridReact<Monitor>
+          ref={gridRef}
           rowData={monitors}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
@@ -188,7 +215,17 @@ export function MonitorsTab(): React.JSX.Element {
         />
       </div>
 
-      <MonitorModal open={showModal} onClose={() => setShowModal(false)} />
+      <MonitorModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        onCreated={handleMonitorCreated}
+      />
+
+      <Toast
+        message={toast || ''}
+        visible={!!toast}
+        onDismiss={() => setToast(null)}
+      />
     </div>
   )
 }

@@ -149,6 +149,20 @@ export interface RecentCategory {
   usedAt: number
 }
 
+export interface FavoriteCategory {
+  categoryId: string
+  name: string
+  path: string
+  isLeaf: boolean
+  starredAt: number
+}
+
+export interface TestSearchPreview {
+  count: number
+  sampleListings: { title: string; total: number }[]
+  suggestions: string[]
+}
+
 // ============================================================
 // View types
 // ============================================================
