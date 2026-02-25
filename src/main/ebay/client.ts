@@ -47,12 +47,22 @@ function incrementApiCalls(): void {
 // OAuth 2.0 - Client Credentials Grant (Application Token)
 // ============================================================
 async function getAppToken(): Promise<string> {
+  // If a manually-provided OAuth token exists, use it directly
+  if (credentials?.oauthToken) {
+    addLog('info', 'Using manually-provided OAuth token')
+    return credentials.oauthToken
+  }
+
   // Return cached token if still valid (with 60s buffer)
   if (oauthAppToken && Date.now() < oauthTokenExpiry - 60_000) {
     return oauthAppToken
   }
 
   if (!credentials) throw new Error('No credentials configured')
+
+  if (!credentials.certId) {
+    throw new Error('Cert ID (Client Secret) is required for auto-generating OAuth tokens. Either provide a Cert ID or paste an OAuth token from developer.ebay.com.')
+  }
 
   const tokenUrl = credentials.environment === 'PRODUCTION'
     ? 'https://api.ebay.com/identity/v1/oauth2/token'

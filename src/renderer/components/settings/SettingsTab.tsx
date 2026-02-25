@@ -181,13 +181,15 @@ export function SettingsTab(): React.JSX.Element {
             />
           </div>
           <div className="col-span-2">
-            <label className="text-[11px] text-muted-foreground mb-1 block">OAuth Token (optional — auto-generated from App ID + Cert ID)</label>
+            <label className="text-[11px] text-muted-foreground mb-1 block">
+              OAuth Application Token — click &quot;Get OAuth Application Token&quot; on developer.ebay.com and paste here
+            </label>
             <Input
               type="password"
               value={form.oauthToken}
               onChange={(e) => update('oauthToken', e.target.value)}
               className="h-8 text-xs font-mono"
-              placeholder="Leave blank — token is generated automatically"
+              placeholder="v^1.1#i^1#p^3#r^1#I^3#f^0#t^Ul4..."
             />
           </div>
         </div>
