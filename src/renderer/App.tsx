@@ -25,6 +25,7 @@ export default function App(): React.JSX.Element {
     fetchEngineStatus()
     fetchMonitors()
     fetchViews()
+    useSearchStore.getState().loadPersistedPrefs()
   }, [fetchEngineStatus, fetchMonitors, fetchViews])
 
   const handleStatusChanged = useCallback((status: EngineStatus) => {

@@ -51,6 +51,7 @@ interface SearchStore {
   // Density preference
   density: 'compact' | 'comfortable'
   setDensity: (d: 'compact' | 'comfortable') => void
+  loadPersistedPrefs: () => Promise<void>
 }
 
 const defaultFilters: SearchStore['filters'] = {
@@ -197,12 +198,17 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setDensity: (d) => {
     set({ density: d })
     invoke('appState:set', { key: 'gridDensity', value: d }).catch(() => {})
+  },
+
+  // Called once from App.tsx useEffect to load persisted preferences
+  loadPersistedPrefs: async () => {
+    try {
+      const val = await invoke('appState:get', 'gridDensity')
+      if (val === 'compact' || val === 'comfortable') {
+        set({ density: val })
+      }
+    } catch {
+      // Ignore — defaults are fine
+    }
   }
 }))
-
-// Load persisted density on startup
-invoke('appState:get', 'gridDensity').then(val => {
-  if (val === 'compact' || val === 'comfortable') {
-    useSearchStore.setState({ density: val })
-  }
-}).catch(() => {})

@@ -5,7 +5,7 @@ import type { ColDef, CellValueChangedEvent, RowSelectedEvent } from 'ag-grid-co
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { MonitorModal } from './MonitorModal'
-import { Toast } from '../ui/Toast'
+import { showToast } from '../ui/Toast'
 import { useMonitorStore } from '@/stores/monitorStore'
 import { useAppStore } from '@/stores/appStore'
 import { timeAgo } from '@/lib/utils'
@@ -21,7 +21,6 @@ export function MonitorsTab(): React.JSX.Element {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [quickKeywords, setQuickKeywords] = useState('')
   const [quickCreating, setQuickCreating] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const gridRef = useRef<AgGridReact<Monitor>>(null)
 
   const handleQuickCreate = useCallback(async () => {
@@ -57,7 +56,7 @@ export function MonitorsTab(): React.JSX.Element {
       }
       const monitor = await createMonitor(input)
       setQuickKeywords('')
-      setToast('Monitor created and enabled')
+      showToast('Monitor created and enabled')
       selectMonitorInGrid(monitor.id)
     } finally {
       setQuickCreating(false)
@@ -221,11 +220,6 @@ export function MonitorsTab(): React.JSX.Element {
         onCreated={handleMonitorCreated}
       />
 
-      <Toast
-        message={toast || ''}
-        visible={!!toast}
-        onDismiss={() => setToast(null)}
-      />
     </div>
   )
 }
