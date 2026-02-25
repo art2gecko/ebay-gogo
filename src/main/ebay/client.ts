@@ -22,7 +22,7 @@ export function getCredentials(): EbayCredentials | null {
 }
 
 export function isMockMode(): boolean {
-  return !credentials || !credentials.appId
+  return !credentials || (!credentials.appId && !credentials.oauthToken)
 }
 
 export function getApiCallsToday(): number {

@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
 
   // Load credentials into eBay client
   const creds = getCredentials()
-  if (creds.appId) {
+  if (creds.appId || creds.oauthToken) {
     setCredentials(creds)
   }
 

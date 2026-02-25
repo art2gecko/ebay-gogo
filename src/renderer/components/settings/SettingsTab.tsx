@@ -132,8 +132,8 @@ export function SettingsTab(): React.JSX.Element {
         <div className="flex items-center gap-2 mb-3">
           <Shield size={16} className="text-primary" />
           <h3 className="text-sm font-semibold">eBay API Credentials</h3>
-          <Badge variant={form.appId ? 'success' : 'warning'}>
-            {form.appId ? 'Configured' : 'Mock Mode'}
+          <Badge variant={(form.appId || form.oauthToken) ? 'success' : 'warning'}>
+            {(form.appId || form.oauthToken) ? 'Configured' : 'Mock Mode'}
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground mb-3">
